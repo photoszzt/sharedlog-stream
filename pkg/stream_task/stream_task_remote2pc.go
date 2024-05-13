@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/env_config"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/transaction"
@@ -26,7 +27,7 @@ func GetRemoteTxnMngrAddr() []string {
 	return strings.Split(raw_addr, ",")
 }
 
-func prepareInit(rtm_client *transaction.RemoteTxnMngrClientBoki, args *StreamTaskArgs) *remote_txn_rpc.InitArg {
+func prepareInit(rtm_client exactly_once_intr.ReadOnlyExactlyOnceManager, args *StreamTaskArgs) *remote_txn_rpc.InitArg {
 	arg := remote_txn_rpc.InitArg{
 		TransactionalId: args.transactionalId,
 		SubstreamNum:    uint32(args.ectx.SubstreamNum()),
@@ -85,15 +86,15 @@ func getNodeConstraint(instance uint8) string {
 }
 
 func SetupManagerForRemote2pc(ctx context.Context, t *StreamTask, args *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
-) (*transaction.RemoteTxnMngrClientBoki, *control_channel.ControlChannelManager, error) {
+) (*transaction.RemoteTxnMngrClientGrpc, *control_channel.ControlChannelManager, error) {
 	checkStreamArgs(args)
-	// conn, err := prepareGrpc(args.ectx.SubstreamNum())
-	// if err != nil {
-	// 	return nil, nil, err
-	// }
-	// client := transaction.NewRemoteTxnMngrClientGrpc(conn, args.transactionalId)
-	node := getNodeConstraint(args.ectx.SubstreamNum())
-	client := transaction.NewRemoteTxnMngrClientBoki(args.faas_gateway, node, args.serdeFormat, args.transactionalId)
+	conn, err := prepareGrpc(args.ectx.SubstreamNum())
+	if err != nil {
+		return nil, nil, err
+	}
+	client := transaction.NewRemoteTxnMngrClientGrpc(conn, args.transactionalId)
+	// node := getNodeConstraint(args.ectx.SubstreamNum())
+	// client := transaction.NewRemoteTxnMngrClientBoki(args.faas_gateway, node, args.serdeFormat, args.transactionalId)
 	debug.Fprintf(os.Stderr, "[%d] remote txn manager client setup done\n",
 		args.ectx.SubstreamNum())
 
@@ -168,9 +169,10 @@ func SetupManagerForRemote2pc(ctx context.Context, t *StreamTask, args *StreamTa
 
 type rtxnProcessMeta struct {
 	t          *StreamTask
-	rtm_client *transaction.RemoteTxnMngrClientBoki
-	cmm        *control_channel.ControlChannelManager
-	args       *StreamTaskArgs
+	rtm_client *transaction.RemoteTxnMngrClientGrpc
+	// rtm_client *transaction.RemoteTxnMngrClientBoki
+	cmm  *control_channel.ControlChannelManager
+	args *StreamTaskArgs
 }
 
 func processWithRTxnMngr(

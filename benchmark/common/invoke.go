@@ -267,20 +267,22 @@ func ParseFunctionOutputs(outputMap map[string][]FnOutput, statDir string) {
 type InvokeSrcFunc func(client *http.Client, srcInvokeConfig SrcInvokeConfig, response *FnOutput, wg *sync.WaitGroup, warmup bool)
 
 func InvokeRTxnMngr(client *http.Client, faas_gateway string, local bool, rtxnNodeIdStart int) {
-	var response FnOutput
 	appName := "remoteTxnMngr"
 	url := BuildFunctionUrl(faas_gateway, appName)
-	fmt.Fprintf(os.Stderr, "chkptmngr url is %s\n", url)
+	fmt.Fprintf(os.Stderr, "rtxnmngr url is %s\n", url)
 	constraint := ""
 	for i := rtxnNodeIdStart; i < rtxnNodeIdStart+4; i++ {
 		if !local {
 			constraint = strconv.Itoa(i)
 		}
-		if err := JsonPostRequest(client, url, constraint, nil, &response); err != nil {
-			log.Error().Msgf("%s request failed: %v", appName, err)
-		} else if !response.Success {
-			log.Error().Msgf("%s request failed: %s", appName, response.Message)
-		}
+		go func(client *http.Client, url, constraint string) {
+			var response FnOutput
+			if err := JsonPostRequest(client, url, constraint, nil, &response); err != nil {
+				log.Error().Msgf("%s request failed: %v", appName, err)
+			} else if !response.Success {
+				log.Error().Msgf("%s request failed: %s", appName, response.Message)
+			}
+		}(client, url, constraint)
 	}
 }
 
@@ -371,10 +373,9 @@ func Invoke(invokeParam InvokeFuncParam,
 		go InvokeChkMngr(&wg, client, &chkMngrConfig, invokeParam.GatewayUrl,
 			invokeParam.Local)
 		time.Sleep(time.Duration(5) * time.Millisecond)
+	} else if exactly_once_intr.GuaranteeMth(baseQueryInput.GuaranteeMth) == exactly_once_intr.REMOTE_2PC {
+		InvokeRTxnMngr(client, invokeParam.GatewayUrl, invokeParam.Local, 9)
 	}
-	// else if exactly_once_intr.GuaranteeMth(baseQueryInput.GuaranteeMth) == exactly_once_intr.REMOTE_2PC {
-	// 	InvokeRTxnMngr(client, invokeParam.GatewayUrl, invokeParam.Local, 9)
-	// }
 
 	fmt.Fprintf(os.Stderr, "src instance: %d\n", params.SrcInvokeConfig.NumSrcInstance)
 

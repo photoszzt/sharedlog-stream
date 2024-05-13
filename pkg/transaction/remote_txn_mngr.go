@@ -233,8 +233,8 @@ func (s *RemoteTxnManager) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg
 }
 
 func (s *RemoteTxnManager) AppendConsumedOffset(ctx context.Context, in *remote_txn_rpc.ConsumedOffsets) error {
-	debug.Fprintf(os.Stderr, "handle AppendConsumedOffset taskId: %#x, taskEpoch: %#x, transactionalId %v, state %v, tps %v\n",
-		in.ProdId.TaskId, in.ProdId.TaskEpoch, in.TransactionalId, in.OffsetPairs)
+	debug.Fprintf(os.Stderr, "handle AppendConsumedOffset taskId: %#x, taskEpoch: %#x, transactionalId %v, offsetpairs %v, par_num %v\n",
+		in.ProdId.TaskId, in.ProdId.TaskEpoch, in.TransactionalId, in.OffsetPairs, in.ParNum)
 	s.mu.Lock()
 	prodId := s.prod_id_map[in.TransactionalId]
 	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
