@@ -1,6 +1,7 @@
 package commtypes
 
 import (
+	"context"
 	"time"
 )
 
@@ -17,3 +18,12 @@ type CreateChangelogManagerParam struct {
 }
 
 type ENVID struct{}
+
+func GetCtxId(ctx context.Context) string {
+	id, ok := ctx.Value(CTXID{}).(string)
+	if ok {
+		return id
+	} else {
+		return ""
+	}
+}

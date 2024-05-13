@@ -6,9 +6,11 @@ import (
 	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 
 	"github.com/gammazero/deque"
+	"github.com/rs/zerolog/log"
 )
 
 type LastMarkAndSeqRange struct {
@@ -96,6 +98,7 @@ func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8)
 			return retMsg, nil
 		}
 	}
+	ctxid := commtypes.GetCtxId(ctx)
 	for {
 		rawMsg, err := tac.stream.ReadNext(ctx, parNum)
 		if err != nil {
@@ -118,12 +121,12 @@ func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8)
 		} else {
 			txnMark, err := tac.epochMarkerSerde.Decode(rawMsg.Payload)
 			if err != nil {
-				// debug.Fprintf(os.Stderr, "[ERROR] return err2: %v\n", err)
+				log.Err(err).Msg("[ERROR] fail to decode epochMarker")
 				return nil, err
 			}
-			// if txnMark.Mark == commtypes.SCALE_FENCE || txnMark.Mark == commtypes.STREAM_END {
-			// 	debug.Fprintf(os.Stderr, "appending %+v, logSeq: 0x%x\n", txnMark, rawMsg.LogSeqNum)
-			// }
+			if txnMark.Mark == commtypes.SCALE_FENCE || txnMark.Mark == commtypes.STREAM_END {
+				debug.Fprintf(os.Stderr, "[%d, id=%s] Got %+v, logSeq: 0x%x\n", parNum, ctxid, txnMark, rawMsg.LogSeqNum)
+			}
 			if txnMark.Mark == commtypes.EPOCH_END {
 				rangesAndLastMark := tac.createMarkedMapIfNotExists(rawMsg.ProdId, parNum)
 				start := rangesAndLastMark[parNum].lastMark + 1
