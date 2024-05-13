@@ -10,7 +10,7 @@ import (
 	"sharedlog-stream/pkg/debug"
 
 	// "sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/stream_task"
+
 	"sync"
 	"time"
 
@@ -20,7 +20,6 @@ import (
 func joinProcLoop[KIn, VIn, KOut, VOut any](
 	ctx context.Context,
 	jm *JoinProcManager,
-	task *stream_task.StreamTask,
 	procArgs *JoinProcArgs[KIn, VIn, KOut, VOut],
 	wg *sync.WaitGroup,
 	msgSerdePair MsgSerdePair[KIn, VIn, KOut, VOut],

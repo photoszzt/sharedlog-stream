@@ -4,7 +4,6 @@ import (
 	"context"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/utils/syncutils"
 	"sync"
 	"sync/atomic"
@@ -66,13 +65,12 @@ func (jm *JoinProcManager) UnlockRunlock() {
 func LaunchJoinProcLoop[KIn, VIn, KOut, VOut any](
 	ctx context.Context,
 	jm *JoinProcManager,
-	task *stream_task.StreamTask,
 	procArgs *JoinProcArgs[KIn, VIn, KOut, VOut],
 	wg *sync.WaitGroup,
 	msgSerdePair MsgSerdePair[KIn, VIn, KOut, VOut],
 ) {
 	wg.Add(1)
-	go joinProcLoop(ctx, jm, task, procArgs, wg, msgSerdePair)
+	go joinProcLoop(ctx, jm, procArgs, wg, msgSerdePair)
 }
 
 func (jm *JoinProcManager) RequestToTerminate() {

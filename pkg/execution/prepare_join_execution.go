@@ -104,8 +104,8 @@ func PrepareTaskWithJoin[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR any]
 		InitFunc(
 			func(task *stream_task.StreamTask) {
 				// debug.Fprintf(os.Stderr, "init ts=%d launch join proc loops\n", time.Now().UnixMilli())
-				LaunchJoinProcLoop(lctx, leftManager, task, joinProcLeft, &wg, leftMsgPair)
-				LaunchJoinProcLoop(rctx, rightManager, task, joinProcRight, &wg, rightMsgPair)
+				LaunchJoinProcLoop(lctx, leftManager, joinProcLeft, &wg, leftMsgPair)
+				LaunchJoinProcLoop(rctx, rightManager, joinProcRight, &wg, rightMsgPair)
 				// debug.Fprintf(os.Stderr, "init ts=%d done invoke join proc loops\n", time.Now().UnixMilli())
 			}).
 		PauseFunc(
@@ -132,8 +132,8 @@ func PrepareTaskWithJoin[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR any]
 					rightManager.gotChkptMark.Store(false)
 					leftManager.ctrlMsg = nil
 					rightManager.ctrlMsg = nil
-					LaunchJoinProcLoop(lctx, leftManager, task, joinProcLeft, &wg, leftMsgPair)
-					LaunchJoinProcLoop(rctx, rightManager, task, joinProcRight, &wg, rightMsgPair)
+					LaunchJoinProcLoop(lctx, leftManager, joinProcLeft, &wg, leftMsgPair)
+					LaunchJoinProcLoop(rctx, rightManager, joinProcRight, &wg, rightMsgPair)
 				} else {
 					leftManager.UnlockRunlock()
 					rightManager.UnlockRunlock()
