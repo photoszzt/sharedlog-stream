@@ -116,13 +116,13 @@ type StreamParam struct {
 }
 
 type StreamParams struct {
-	StreamParams []StreamParam `json:"streamParams"`
+	StreamParams []*StreamParam `json:"streamParams"`
 }
 
 type DumpStreams struct {
-	DumpDir      string        `json:"dumpDir"`
-	StreamParams []StreamParam `json:"streamParams"`
-	SerdeFormat  uint8         `json:"serdeFormat"`
+	DumpDir      string         `json:"dumpDir"`
+	StreamParams []*StreamParam `json:"streamParams"`
+	SerdeFormat  uint8          `json:"serdeFormat"`
 }
 
 type TestSourceInput struct {

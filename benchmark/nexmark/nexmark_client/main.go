@@ -131,7 +131,7 @@ func main() {
 		if FLAGS_app_name == "q7" {
 			fixedMaxDur = uint32(450)
 		}
-		err := common.Invoke(invokeFuncParam, baseQueryInput, common.InvokeSrcFunc(invokeSourceFunc_),
+		params, err := common.Invoke(invokeFuncParam, baseQueryInput, common.InvokeSrcFunc(invokeSourceFunc_),
 			FLAGS_additionalBytes, fixedMaxDur)
 		if err != nil {
 			panic(err)
@@ -149,7 +149,7 @@ func main() {
 				Timeout: time.Duration(FLAGS_duration) * time.Second,
 			}
 			common.InvokeDumpFunc(client, FLAGS_dump_dir, FLAGS_app_name,
-				common.GetSerdeFormat(FLAGS_serdeFormat), FLAGS_faas_gateway)
+				common.GetSerdeFormat(FLAGS_serdeFormat), FLAGS_faas_gateway, params.ConfigScaleInput.Config)
 		}
 	default:
 		panic("unrecognized app")

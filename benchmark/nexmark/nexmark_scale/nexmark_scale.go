@@ -175,6 +175,6 @@ func main() {
 			Timeout: timeout,
 		}
 		common.InvokeDumpFunc(client, FLAGS_dump_dir, FLAGS_app_name,
-			common.GetSerdeFormat(FLAGS_serdeFormat), FLAGS_faas_gateway)
+			common.GetSerdeFormat(FLAGS_serdeFormat), FLAGS_faas_gateway, params.ConfigScaleInput.Config)
 	}
 }
