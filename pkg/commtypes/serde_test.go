@@ -59,21 +59,21 @@ func TestEncodeDecodeUint32(t *testing.T) {
 	a := uint32(100000)
 	s := Uint32Serde{}
 	ss := Uint32SerdeG{}
-	GenTestEncodeDecode[uint32](a, t, ss, s)
+	GenTestEncodeDecode(a, t, ss, s)
 }
 
 func TestEncodeDecodeUint16(t *testing.T) {
 	a := uint16(1111)
 	s := Uint16Serde{}
 	ss := Uint16SerdeG{}
-	GenTestEncodeDecode[uint16](a, t, ss, s)
+	GenTestEncodeDecode(a, t, ss, s)
 }
 
 func TestEncodeDecodeUint8(t *testing.T) {
 	a := uint8(111)
 	s := Uint8Serde{}
 	ss := Uint8SerdeG{}
-	GenTestEncodeDecode[uint8](a, t, ss, s)
+	GenTestEncodeDecode(a, t, ss, s)
 }
 
 func TestEncodeDecodeInt64(t *testing.T) {

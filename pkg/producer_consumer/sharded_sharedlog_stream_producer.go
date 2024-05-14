@@ -149,7 +149,7 @@ func (sls *ShardedSharedLogStreamProducer) ProduceCtrlMsg(ctx context.Context, m
 }
 
 func (sls *ShardedSharedLogStreamProducer) ProduceData(ctx context.Context, msgSer commtypes.MessageSerialized, parNum uint8) error {
-	bytes, b, err := sls.msgSerSerde.Encode(msgSer)
+	bytes, _, err := sls.msgSerSerde.Encode(msgSer)
 	if err != nil {
 		return err
 	}
@@ -162,10 +162,10 @@ func (sls *ShardedSharedLogStreamProducer) ProduceData(ctx context.Context, msgS
 				return err
 			}
 			_, err := sls.push(ctx, bytes, parNum, sharedlog_stream.StreamEntryMeta(false, false))
-			if sls.msgSerSerde.UsedBufferPool() && b != nil {
-				*b = bytes
-				commtypes.PushBuffer(b)
-			}
+			// if sls.msgSerSerde.UsedBufferPool() && b != nil {
+			// 	*b = bytes
+			// 	commtypes.PushBuffer(b)
+			// }
 			return err
 		}
 	}

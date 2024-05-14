@@ -159,9 +159,10 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	// TODO: need to deal with sequence number overflow
 	msgSeq := s.curAppendMsgSeqNum.Add(1)
 	logEntry.MsgSeqNum = msgSeq
-	b := commtypes.PopBuffer(logEntry.Msgsize())
-	buf := *b
-	encoded, err := logEntry.MarshalMsg(buf[:0])
+	// b := commtypes.PopBuffer(logEntry.Msgsize())
+	// buf := *b
+	// encoded, err := logEntry.MarshalMsg(buf[:0])
+	encoded, err := logEntry.MarshalMsg(nil)
 	if err != nil {
 		return 0, err
 	}
@@ -169,14 +170,14 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	s.mux.Lock()
 	seqNum, err := env.SharedLogAppend(ctx, tags, encoded)
 	if err != nil {
-		commtypes.PushBuffer(&encoded)
+		// commtypes.PushBuffer(&encoded)
 		return 0, err
 	}
 	s.tail = seqNum + 1
 	s.mux.Unlock()
 
-	*b = encoded
-	commtypes.PushBuffer(b)
+	// *b = encoded
+	// commtypes.PushBuffer(b)
 	// verify that push is successful
 
 	// debug.Fprintf(os.Stderr, "push to %s tag: ", s.topicName)

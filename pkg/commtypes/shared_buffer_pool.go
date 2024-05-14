@@ -88,14 +88,14 @@ func (p *simpleSharedBufferPool) poolIdx(size int) int {
 }
 
 const (
-	level0PoolMaxSize = 16                     // 16  B
-	level1PoolMaxSize = level0PoolMaxSize * 4  // 64  B
-	level2PoolMaxSize = level1PoolMaxSize * 4  // 256 B
-	level3PoolMaxSize = level2PoolMaxSize * 4  //  1 KB
-	level4PoolMaxSize = level3PoolMaxSize * 4  //  4 KB
-	level5PoolMaxSize = level4PoolMaxSize * 4  // 16 KB
-	level6PoolMaxSize = level5PoolMaxSize * 4  // 64 KB
-	level7PoolMaxSize = level6PoolMaxSize * 16 // 1  MB
+	level0PoolMaxSize = 16                         //  16  B
+	level1PoolMaxSize = level0PoolMaxSize * 4      //  64  B
+	level2PoolMaxSize = level1PoolMaxSize * 4      // 256  B
+	level3PoolMaxSize = level2PoolMaxSize * 4      //   1 KB
+	level4PoolMaxSize = level3PoolMaxSize * 4      //   4 KB
+	level5PoolMaxSize = level4PoolMaxSize * 4      //  16 KB
+	level6PoolMaxSize = level5PoolMaxSize*8 + 4096 // 132 KB
+	level7PoolMaxSize = level6PoolMaxSize * 16     //   1 MB
 )
 
 const (
