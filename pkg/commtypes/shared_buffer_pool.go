@@ -128,7 +128,7 @@ func (p *bufferPool) Get(size int) *[]byte {
 	if cap(*bs) < size {
 		p.Pool.Put(bs)
 
-		r := make([]byte, size)
+		r := make([]byte, 0, size)
 		return &r
 	}
 
@@ -139,7 +139,7 @@ func newBytesPool(size int) simpleSharedBufferChildPool {
 	return &bufferPool{
 		Pool: sync.Pool{
 			New: func() any {
-				bs := make([]byte, size)
+				bs := make([]byte, 0, size)
 				return &bs
 			},
 		},
