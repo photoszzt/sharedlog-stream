@@ -3,7 +3,9 @@ package producer_consumer
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 	eo_intr "sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
@@ -122,8 +124,8 @@ func (sls *ShardedSharedLogStreamProducer) ProduceCtrlMsg(ctx context.Context, m
 		return len(parNums), nil
 	} else if msg.Mark == commtypes.STREAM_END {
 		for _, parNum := range parNums {
-			_, err := sls.push(ctx, msg.Payload, parNum, sharedlog_stream.ControlRecordMeta)
-			// debug.Fprintf(os.Stderr, "Producer: push end of stream to %s %d at 0x%x\n", sls.Stream().TopicName(), parNum, off)
+			off, err := sls.push(ctx, msg.Payload, parNum, sharedlog_stream.ControlRecordMeta)
+			debug.Fprintf(os.Stderr, "Producer %v: push end of stream to %s %d at 0x%x\n", sls.eom.GetProducerId(), sls.Stream().TopicName(), parNum, off)
 			if err != nil {
 				return 0, err
 			}

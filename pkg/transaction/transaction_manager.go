@@ -142,7 +142,7 @@ func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context)
 		State:           txn_data.EMPTY,
 	}
 
-	debug.Fprintf(os.Stderr, "getMostRecentTransactionState: ReadBackwardWithTag 1\n")
+	// debug.Fprintf(os.Stderr, "getMostRecentTransactionState: ReadBackwardWithTag 1\n")
 	// find the most recent completed transaction
 	rawMsg, err = tc.transactionLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, 0, tc.tranCompleteMarkerTag)
 	if err != nil {
@@ -154,7 +154,7 @@ func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context)
 
 	begin := uint64(0)
 	// try to find one before the last one
-	debug.Fprintf(os.Stderr, "getMostRecentTransactionState: ReadBackwardWithTag 2\n")
+	// debug.Fprintf(os.Stderr, "getMostRecentTransactionState: ReadBackwardWithTag 2\n")
 	rawMsg2, err := tc.transactionLog.ReadBackwardWithTag(ctx, rawMsg.LogSeqNum, 0, tc.tranCompleteMarkerTag)
 	if err != nil {
 		if !common_errors.IsStreamEmptyError(err) {
@@ -166,7 +166,7 @@ func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context)
 	tc.transactionLog.SetCursor(begin+1, 0)
 
 	for {
-		debug.Fprintf(os.Stderr, "getMostRecentTransactionState: ReadNext\n")
+		// debug.Fprintf(os.Stderr, "getMostRecentTransactionState: ReadNext\n")
 		msg, err := tc.transactionLog.ReadNext(ctx, 0)
 		if common_errors.IsStreamEmptyError(err) {
 			break
