@@ -13,6 +13,6 @@ fi
 APP_NAME=$1
 GUA=${2:-alo}
 ./bin/nexmark_client -app_name $APP_NAME -wconfig ./workload_config/4node/4_ins/${APP_NAME}.json \
-    -guarantee $GUA -duration 60 -comm_everyMS 100 -src_flushms 100 -flushms 100 -serde msgp \
-    -stat_dir ./${APP_NAME}_stats -tps 3000 -events_num 180000 -waitForLast=true \
-    -snapshot_everyS=10
+    -guarantee $GUA -duration 30 -comm_everyMS 100 -src_flushms 100 -flushms 100 -serde msgp \
+    -stat_dir ./${APP_NAME}_stats -tps 1000 -events_num 30000 -waitForLast=true \
+    -snapshot_everyS=10 -dumpdir=$(realpath ./${APP_NAME}_out)
