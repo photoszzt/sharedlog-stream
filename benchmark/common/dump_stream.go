@@ -32,6 +32,10 @@ func DumpOutputStream(ctx context.Context, args DumpOutputStreamConfig) error {
 		return err
 	}
 	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE
+	err = os.MkdirAll(args.OutputDir, 0755)
+	if err != nil {
+		return err
+	}
 	for i := uint8(0); i < args.NumPartitions; i++ {
 		outFilePath := path.Join(args.OutputDir, fmt.Sprintf("%s-%d.txt", args.TopicName, i))
 		outFile, err := os.Create(outFilePath)
