@@ -87,6 +87,10 @@ type RedisSetupInput struct {
 	FinalOutputTopicNames []string `json:"outTpNames"`
 }
 
+type RTxnMngrInput struct {
+	SerdeFormat uint8 `json:"serde_format"`
+}
+
 type ChkptMngrInput struct {
 	SrcTopicName string `json:"srcTpName"`
 	// final stage's output partition and partition number

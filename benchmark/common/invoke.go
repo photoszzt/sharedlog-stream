@@ -266,7 +266,7 @@ func ParseFunctionOutputs(outputMap map[string][]FnOutput, statDir string) {
 
 type InvokeSrcFunc func(client *http.Client, srcInvokeConfig SrcInvokeConfig, response *FnOutput, wg *sync.WaitGroup, warmup bool)
 
-func InvokeRTxnMngr(client *http.Client, faas_gateway string, local bool, rtxnNodeIdStart int) {
+func InvokeRTxnMngr(client *http.Client, input *RTxnMngrInput, faas_gateway string, local bool, rtxnNodeIdStart int) {
 	appName := "remoteTxnMngr"
 	url := BuildFunctionUrl(faas_gateway, appName)
 	fmt.Fprintf(os.Stderr, "rtxnmngr url is %s\n", url)
@@ -277,7 +277,7 @@ func InvokeRTxnMngr(client *http.Client, faas_gateway string, local bool, rtxnNo
 		}
 		go func(client *http.Client, url, constraint string) {
 			var response FnOutput
-			if err := JsonPostRequest(client, url, constraint, nil, &response); err != nil {
+			if err := JsonPostRequest(client, url, constraint, input, &response); err != nil {
 				log.Error().Msgf("%s request failed: %v", appName, err)
 			} else if !response.Success {
 				log.Error().Msgf("%s request failed: %s", appName, response.Message)
@@ -374,7 +374,7 @@ func Invoke(invokeParam InvokeFuncParam,
 			invokeParam.Local)
 		time.Sleep(time.Duration(5) * time.Millisecond)
 	} else if exactly_once_intr.GuaranteeMth(baseQueryInput.GuaranteeMth) == exactly_once_intr.REMOTE_2PC {
-		InvokeRTxnMngr(client, invokeParam.GatewayUrl, invokeParam.Local, 9)
+		InvokeRTxnMngr(client, &RTxnMngrInput{SerdeFormat: baseQueryInput.SerdeFormat}, invokeParam.GatewayUrl, invokeParam.Local, 9)
 	}
 
 	fmt.Fprintf(os.Stderr, "src instance: %d\n", params.SrcInvokeConfig.NumSrcInstance)

@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/transaction/remote_txn_rpc"
 	"strconv"
@@ -27,9 +27,8 @@ type emptyFuncHanlder struct {
 }
 
 var (
-	lunched     atomic.Bool
-	serdeFormat commtypes.SerdeFormat
-	port        int
+	lunched atomic.Bool
+	port    int
 )
 
 func (h *emptyFuncHanlder) Call(ctx context.Context, input []byte) ([]byte, error) {
@@ -37,12 +36,18 @@ func (h *emptyFuncHanlder) Call(ctx context.Context, input []byte) ([]byte, erro
 	if !lunched.Load() {
 		lunched.Store(true)
 		lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		parsed := &common.RTxnMngrInput{}
+		err := json.Unmarshal(input, parsed)
+		if err != nil {
+			return nil, err
+		}
 		if err != nil {
 			log.Printf("failed to listen %v: %v", port, err)
 			return nil, err
 		}
 		grpcServer := grpc.NewServer()
-		remote_txn_rpc.RegisterRemoteTxnMngrServer(grpcServer, transaction.NewRemoteTxnManagerServer(h.env, serdeFormat))
+		remote_txn_rpc.RegisterRemoteTxnMngrServer(grpcServer,
+			transaction.NewRemoteTxnManagerServer(h.env, commtypes.SerdeFormat(parsed.SerdeFormat)))
 		go func() {
 			err = grpcServer.Serve(lis)
 			if err != nil {
@@ -73,11 +78,6 @@ func (f *emptyFuncHandlerFactory) GrpcNew(env types.Environment, service string)
 
 func main() {
 	var err error
-	serde := os.Getenv("RTX_SERDE_FORMAT")
-	if serde == "" {
-		serde = "msgp"
-		log.Printf("serdeFormat default to msgp")
-	}
 	portStr := os.Getenv("RTX_PORT")
 	if portStr == "" {
 		port = 5050
@@ -87,8 +87,7 @@ func main() {
 			log.Fatalf("[FATAL] Failed to read rtx port")
 		}
 	}
-	serdeFormat = common.GetSerdeFormat(serde)
-	log.Printf("[INFO] port %v, serdeFormat %v\n", port, serdeFormat)
+	log.Printf("[INFO] port %v\n", port)
 	factory := &emptyFuncHandlerFactory{}
 	lunched.Store(false)
 	faas.Serve(factory)
