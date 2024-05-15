@@ -94,11 +94,11 @@ func (s ChangeGJSONSerdeG[V]) Encode(value ChangeG[V]) ([]byte, *[]byte, error) 
 	c, newBuf, oldBuf, err := changeGToChangeSer(value, s.ValJSONSerde)
 	defer func() {
 		if s.ValJSONSerde.UsedBufferPool() && c != nil {
-			if c.NewValSerialized != nil {
+			if newBuf != nil {
 				*newBuf = c.NewValSerialized
 				PushBuffer(newBuf)
 			}
-			if c.OldValSerialized != nil {
+			if oldBuf != nil {
 				*oldBuf = c.OldValSerialized
 				PushBuffer(oldBuf)
 			}
@@ -134,11 +134,11 @@ func (s ChangeGMsgpSerdeG[V]) Encode(value ChangeG[V]) ([]byte, *[]byte, error) 
 	c, newBuf, oldBuf, err := changeGToChangeSer(value, s.ValMsgpSerde)
 	defer func() {
 		if s.ValMsgpSerde.UsedBufferPool() && c != nil {
-			if c.NewValSerialized != nil {
+			if newBuf != nil {
 				*newBuf = c.NewValSerialized
 				PushBuffer(newBuf)
 			}
-			if c.OldValSerialized != nil {
+			if oldBuf != nil {
 				*oldBuf = c.OldValSerialized
 				PushBuffer(oldBuf)
 			}

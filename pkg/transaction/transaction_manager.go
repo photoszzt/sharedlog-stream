@@ -350,7 +350,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 		}
 	}
 	err = bg.Wait()
-	if tc.txnMarkerSerde.UsedBufferPool() {
+	if tc.txnMarkerSerde.UsedBufferPool() && b != nil {
 		*b = encoded
 		commtypes.PushBuffer(b)
 	}

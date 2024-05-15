@@ -56,11 +56,11 @@ func (s KeyValuePairJSONSerdeG[K, V]) String() string {
 func (s KeyValuePairJSONSerdeG[K, V]) Encode(v *KeyValuePair[K, V]) ([]byte, *[]byte, error) {
 	kvser, kbuf, vbuf, err := KVPairToKVPairSer(v, s.keySerde, s.valSerde)
 	defer func() {
-		if s.keySerde.UsedBufferPool() && kvser.KeyEnc != nil {
+		if s.keySerde.UsedBufferPool() && kbuf != nil {
 			*kbuf = kvser.KeyEnc
 			PushBuffer(kbuf)
 		}
-		if s.valSerde.UsedBufferPool() && kvser.ValueEnc != nil {
+		if s.valSerde.UsedBufferPool() && vbuf != nil {
 			*vbuf = kvser.ValueEnc
 			PushBuffer(vbuf)
 		}

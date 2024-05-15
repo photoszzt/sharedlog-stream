@@ -64,7 +64,7 @@ func serToKeyAndWindowStartTs[K any](kwSer *KeyAndWindowStartTsSerialized, keySe
 func (s KeyAndWindowStartTsJSONSerdeG[K]) Encode(value KeyAndWindowStartTsG[K]) ([]byte, *[]byte, error) {
 	kw, buf, err := kwsToKwsSer(value, s.KeyJSONSerde)
 	defer func() {
-		if s.KeyJSONSerde.UsedBufferPool() && kw != nil && kw.KeySerialized != nil {
+		if s.KeyJSONSerde.UsedBufferPool() && buf != nil && kw != nil {
 			*buf = kw.KeySerialized
 			PushBuffer(buf)
 		}
@@ -101,7 +101,7 @@ func (s KeyAndWindowStartTsMsgpSerdeG[K]) String() string {
 func (s KeyAndWindowStartTsMsgpSerdeG[K]) Encode(value KeyAndWindowStartTsG[K]) ([]byte, *[]byte, error) {
 	kw, kbuf, err := kwsToKwsSer(value, s.KeyMsgpSerde)
 	defer func() {
-		if s.KeyMsgpSerde.UsedBufferPool() && kw != nil && kw.KeySerialized != nil {
+		if s.KeyMsgpSerde.UsedBufferPool() && kw != nil && kbuf != nil {
 			*kbuf = kw.KeySerialized
 			PushBuffer(kbuf)
 		}
