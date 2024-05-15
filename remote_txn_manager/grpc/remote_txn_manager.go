@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/transaction/remote_txn_rpc"
 	"strconv"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"cs.utexas.edu/zjia/faas"
@@ -31,16 +32,22 @@ var (
 	port    int
 )
 
+func reusePort(network, address string, conn syscall.RawConn) error {
+	return conn.Control(func(fd uintptr) {
+		_ = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+	})
+}
+
 func (h *emptyFuncHanlder) Call(ctx context.Context, input []byte) ([]byte, error) {
-	debug.Fprintf(os.Stderr, "ctx from call: %v\n", ctx)
 	if !lunched.Load() {
 		lunched.Store(true)
-		lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		parsed := &common.RTxnMngrInput{}
 		err := json.Unmarshal(input, parsed)
 		if err != nil {
 			return nil, err
 		}
+		config := &net.ListenConfig{Control: reusePort}
+		lis, err := config.Listen(ctx, "tcp", fmt.Sprintf(":%d", port))
 		if err != nil {
 			log.Printf("failed to listen %v: %v", port, err)
 			return nil, err
