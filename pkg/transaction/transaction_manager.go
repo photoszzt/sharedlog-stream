@@ -95,6 +95,8 @@ func NewTransactionManager(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+	fmt.Fprintf(os.Stderr, "%s txnMdSerde %s, topicPartitionSerde %s, txnMarkerSerde %s, offsetRecordSerde %s\n",
+		tm.TransactionalId, tm.txnMdSerde, tm.topicPartitionSerde, tm.txnMarkerSerde, tm.offsetRecordSerde)
 	tm.txnMdSerdeUseBuf = tm.txnMdSerde.UsedBufferPool()
 	return tm, nil
 }

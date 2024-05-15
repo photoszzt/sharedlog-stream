@@ -121,7 +121,7 @@ func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8)
 		} else {
 			txnMark, err := tac.epochMarkerSerde.Decode(rawMsg.Payload)
 			if err != nil {
-				log.Err(err).Msg("[ERROR] fail to decode epochMarker")
+				log.Err(err).Str("epoch marker payload", commtypes.StringFromImmutableBytes(rawMsg.Payload)).Msg("[ERROR] fail to decode epochMarker")
 				return nil, err
 			}
 			if txnMark.Mark == commtypes.SCALE_FENCE || txnMark.Mark == commtypes.STREAM_END {

@@ -79,7 +79,8 @@ func NewShardedSharedLogStreamConsumer(stream *sharedlog_stream.ShardedSharedLog
 		notEnded.Add(instanceId)
 		notScaleFenced.Add(instanceId)
 	}
-	fmt.Fprintf(os.Stderr, "%s notEnded: %v, notScaleFence: %v\n", stream.TopicName(), notEnded, notScaleFenced)
+	fmt.Fprintf(os.Stderr, "%s notEnded: %v, notScaleFence: %v, epochMarker: %s\n",
+		stream.TopicName(), notEnded, notScaleFenced, epochMarkSerde.String())
 	return &ShardedSharedLogStreamConsumer{
 		epochMarkerSerde: epochMarkSerde,
 		stream:           stream,

@@ -6,6 +6,8 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/utils"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -307,6 +309,7 @@ func DecodeRawMsgSeqG[K, V any](rawMsg *RawMsgAndSeq, msgSerde MessageGSerdeG[K,
 		for _, payload := range rawMsg.PayloadArr {
 			msg, err := msgSerde.Decode(payload)
 			if err != nil {
+				log.Error().Err(err).Stack().Uint64("LogSeqNum", rawMsg.LogSeqNum).Msg("fail to decode msg")
 				return nil, fmt.Errorf("fail to decode msg 1: %v, serde: %+v", err, msgSerde)
 			}
 			msgArr = append(msgArr, msg)
