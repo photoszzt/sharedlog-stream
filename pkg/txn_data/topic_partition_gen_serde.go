@@ -2,6 +2,7 @@ package txn_data
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -9,6 +10,12 @@ import (
 type TopicPartitionJSONSerde struct {
 	commtypes.DefaultJSONSerde
 }
+
+func (s TopicPartitionJSONSerde) String() string {
+	return "TopicPartitionJSONSerde"
+}
+
+var _ = fmt.Stringer(TopicPartitionJSONSerde{})
 
 var _ = commtypes.Serde(TopicPartitionJSONSerde{})
 
@@ -33,6 +40,12 @@ func (s TopicPartitionJSONSerde) Decode(value []byte) (interface{}, error) {
 type TopicPartitionMsgpSerde struct {
 	commtypes.DefaultMsgpSerde
 }
+
+func (s TopicPartitionMsgpSerde) String() string {
+	return "TopicPartitionMsgpSerde"
+}
+
+var _ = fmt.Stringer(TopicPartitionMsgpSerde{})
 
 var _ = commtypes.Serde(TopicPartitionMsgpSerde{})
 

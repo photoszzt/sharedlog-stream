@@ -2,6 +2,7 @@ package remote_txn_rpc
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -10,7 +11,25 @@ type RTxnArgJSONSerdeG struct {
 	commtypes.DefaultJSONSerde
 }
 
+func (s RTxnArgJSONSerdeG) String() string {
+	return "RTxnArgJSONSerdeG"
+}
+
+var _ = fmt.Stringer(RTxnArgJSONSerdeG{})
+
 var _ = commtypes.SerdeG[*RTxnArg](RTxnArgJSONSerdeG{})
+
+type RTxnArgMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
+
+func (s RTxnArgMsgpSerdeG) String() string {
+	return "RTxnArgMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(RTxnArgMsgpSerdeG{})
+
+var _ = commtypes.SerdeG[*RTxnArg](RTxnArgMsgpSerdeG{})
 
 func (s RTxnArgJSONSerdeG) Encode(value *RTxnArg) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -24,12 +43,6 @@ func (s RTxnArgJSONSerdeG) Decode(value []byte) (*RTxnArg, error) {
 	}
 	return &v, nil
 }
-
-type RTxnArgMsgpSerdeG struct {
-	commtypes.DefaultMsgpSerde
-}
-
-var _ = commtypes.SerdeG[*RTxnArg](RTxnArgMsgpSerdeG{})
 
 func (s RTxnArgMsgpSerdeG) Encode(value *RTxnArg) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer(value.Msgsize())

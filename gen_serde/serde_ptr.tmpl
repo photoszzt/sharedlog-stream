@@ -1,6 +1,7 @@
 package {{.PackageName}}
 
 import (
+	"fmt"
 	"encoding/json"
 	"sharedlog-stream/pkg/common_errors"
 	{{.ExtraImports}}
@@ -9,6 +10,10 @@ import (
 type {{.TypeName}}JSONSerde struct {
 	{{.CommtypesPrefix}}DefaultJSONSerde
 }
+func (s {{.TypeName}}JSONSerde) String() string {
+	return "{{.TypeName}}JSONSerde"
+}
+var _ = fmt.Stringer({{.TypeName}}JSONSerde{})
 
 var _ = {{.CommtypesPrefix}}Serde({{.TypeName}}JSONSerde{})
 
@@ -33,6 +38,10 @@ func (s {{.TypeName}}JSONSerde) Decode(value []byte) (interface{}, error) {
 type {{.TypeName}}MsgpSerde struct {
 	{{.CommtypesPrefix}}DefaultMsgpSerde
 }
+func (s {{.TypeName}}MsgpSerde) String() string {
+	return "{{.TypeName}}MsgpSerde"
+}
+var _ = fmt.Stringer({{.TypeName}}MsgpSerde{})
 
 var _ = {{.CommtypesPrefix}}Serde({{.TypeName}}MsgpSerde{})
 

@@ -2,6 +2,7 @@ package ntypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -9,6 +10,12 @@ import (
 type BidAndMaxJSONSerde struct {
 	commtypes.DefaultJSONSerde
 }
+
+func (s BidAndMaxJSONSerde) String() string {
+	return "BidAndMaxJSONSerde"
+}
+
+var _ = fmt.Stringer(BidAndMaxJSONSerde{})
 
 var _ = commtypes.Serde(BidAndMaxJSONSerde{})
 
@@ -35,6 +42,12 @@ type BidAndMaxMsgpSerde struct {
 }
 
 var _ = commtypes.Serde(BidAndMaxMsgpSerde{})
+
+func (s BidAndMaxMsgpSerde) String() string {
+	return "BidAndMaxMsgpSerde"
+}
+
+var _ = fmt.Stringer(BidAndMaxMsgpSerde{})
 
 func (s BidAndMaxMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	v, ok := value.(*BidAndMax)

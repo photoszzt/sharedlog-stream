@@ -2,6 +2,7 @@ package txn_data
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -10,7 +11,25 @@ type TopicPartitionJSONSerdeG struct {
 	commtypes.DefaultJSONSerde
 }
 
+func (s TopicPartitionJSONSerdeG) String() string {
+	return "TopicPartitionJSONSerdeG"
+}
+
+var _ = fmt.Stringer(TopicPartitionJSONSerdeG{})
+
 var _ = commtypes.SerdeG[*TopicPartition](TopicPartitionJSONSerdeG{})
+
+type TopicPartitionMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
+
+func (s TopicPartitionMsgpSerdeG) String() string {
+	return "TopicPartitionMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(TopicPartitionMsgpSerdeG{})
+
+var _ = commtypes.SerdeG[*TopicPartition](TopicPartitionMsgpSerdeG{})
 
 func (s TopicPartitionJSONSerdeG) Encode(value *TopicPartition) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -24,12 +43,6 @@ func (s TopicPartitionJSONSerdeG) Decode(value []byte) (*TopicPartition, error) 
 	}
 	return &v, nil
 }
-
-type TopicPartitionMsgpSerdeG struct {
-	commtypes.DefaultMsgpSerde
-}
-
-var _ = commtypes.SerdeG[*TopicPartition](TopicPartitionMsgpSerdeG{})
 
 func (s TopicPartitionMsgpSerdeG) Encode(value *TopicPartition) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer(value.Msgsize())

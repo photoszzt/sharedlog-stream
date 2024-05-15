@@ -2,6 +2,7 @@ package ntypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -10,7 +11,25 @@ type BidPriceJSONSerdeG struct {
 	commtypes.DefaultJSONSerde
 }
 
+func (s BidPriceJSONSerdeG) String() string {
+	return "BidPriceJSONSerdeG"
+}
+
+var _ = fmt.Stringer(BidPriceJSONSerdeG{})
+
 var _ = commtypes.SerdeG[BidPrice](BidPriceJSONSerdeG{})
+
+type BidPriceMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
+
+func (s BidPriceMsgpSerdeG) String() string {
+	return "BidPriceMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(BidPriceMsgpSerdeG{})
+
+var _ = commtypes.SerdeG[BidPrice](BidPriceMsgpSerdeG{})
 
 func (s BidPriceJSONSerdeG) Encode(value BidPrice) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -24,12 +43,6 @@ func (s BidPriceJSONSerdeG) Decode(value []byte) (BidPrice, error) {
 	}
 	return v, nil
 }
-
-type BidPriceMsgpSerdeG struct {
-	commtypes.DefaultMsgpSerde
-}
-
-var _ = commtypes.SerdeG[BidPrice](BidPriceMsgpSerdeG{})
 
 func (s BidPriceMsgpSerdeG) Encode(value BidPrice) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer(value.Msgsize())

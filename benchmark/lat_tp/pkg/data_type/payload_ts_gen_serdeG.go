@@ -2,6 +2,7 @@ package datatype
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -10,7 +11,25 @@ type PayloadTsJSONSerdeG struct {
 	commtypes.DefaultJSONSerde
 }
 
+func (s PayloadTsJSONSerdeG) String() string {
+	return "PayloadTsJSONSerdeG"
+}
+
+var _ = fmt.Stringer(PayloadTsJSONSerdeG{})
+
 var _ = commtypes.SerdeG[PayloadTs](PayloadTsJSONSerdeG{})
+
+type PayloadTsMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
+
+func (s PayloadTsMsgpSerdeG) String() string {
+	return "PayloadTsMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(PayloadTsMsgpSerdeG{})
+
+var _ = commtypes.SerdeG[PayloadTs](PayloadTsMsgpSerdeG{})
 
 func (s PayloadTsJSONSerdeG) Encode(value PayloadTs) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -24,12 +43,6 @@ func (s PayloadTsJSONSerdeG) Decode(value []byte) (PayloadTs, error) {
 	}
 	return v, nil
 }
-
-type PayloadTsMsgpSerdeG struct {
-	commtypes.DefaultMsgpSerde
-}
-
-var _ = commtypes.SerdeG[PayloadTs](PayloadTsMsgpSerdeG{})
 
 func (s PayloadTsMsgpSerdeG) Encode(value PayloadTs) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer(value.Msgsize())

@@ -2,12 +2,19 @@ package commtypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 )
 
 type EpochMarkerJSONSerde struct {
 	DefaultJSONSerde
 }
+
+func (s EpochMarkerJSONSerde) String() string {
+	return "EpochMarkerJSONSerde"
+}
+
+var _ = fmt.Stringer(EpochMarkerJSONSerde{})
 
 var _ = Serde(EpochMarkerJSONSerde{})
 
@@ -34,6 +41,12 @@ type EpochMarkerMsgpSerde struct {
 }
 
 var _ = Serde(EpochMarkerMsgpSerde{})
+
+func (s EpochMarkerMsgpSerde) String() string {
+	return "EpochMarkerMsgpSerde"
+}
+
+var _ = fmt.Stringer(EpochMarkerMsgpSerde{})
 
 func (s EpochMarkerMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	v, ok := value.(*EpochMarker)

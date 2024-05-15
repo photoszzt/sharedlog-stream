@@ -2,6 +2,7 @@ package ntypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -9,6 +10,12 @@ import (
 type AuctionIdCountJSONSerde struct {
 	commtypes.DefaultJSONSerde
 }
+
+func (s AuctionIdCountJSONSerde) String() string {
+	return "AuctionIdCountJSONSerde"
+}
+
+var _ = fmt.Stringer(AuctionIdCountJSONSerde{})
 
 var _ = commtypes.Serde(AuctionIdCountJSONSerde{})
 
@@ -35,6 +42,12 @@ type AuctionIdCountMsgpSerde struct {
 }
 
 var _ = commtypes.Serde(AuctionIdCountMsgpSerde{})
+
+func (s AuctionIdCountMsgpSerde) String() string {
+	return "AuctionIdCountMsgpSerde"
+}
+
+var _ = fmt.Stringer(AuctionIdCountMsgpSerde{})
 
 func (s AuctionIdCountMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	v, ok := value.(*AuctionIdCount)

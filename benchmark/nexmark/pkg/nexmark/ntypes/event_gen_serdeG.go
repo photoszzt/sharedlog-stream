@@ -2,6 +2,7 @@ package ntypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -10,7 +11,25 @@ type EventJSONSerdeG struct {
 	commtypes.DefaultJSONSerde
 }
 
+func (s EventJSONSerdeG) String() string {
+	return "EventJSONSerdeG"
+}
+
+var _ = fmt.Stringer(EventJSONSerdeG{})
+
 var _ = commtypes.SerdeG[*Event](EventJSONSerdeG{})
+
+type EventMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
+
+func (s EventMsgpSerdeG) String() string {
+	return "EventMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(EventMsgpSerdeG{})
+
+var _ = commtypes.SerdeG[*Event](EventMsgpSerdeG{})
 
 func (s EventJSONSerdeG) Encode(value *Event) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -24,12 +43,6 @@ func (s EventJSONSerdeG) Decode(value []byte) (*Event, error) {
 	}
 	return &v, nil
 }
-
-type EventMsgpSerdeG struct {
-	commtypes.DefaultMsgpSerde
-}
-
-var _ = commtypes.SerdeG[*Event](EventMsgpSerdeG{})
 
 func (s EventMsgpSerdeG) Encode(value *Event) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer(value.Msgsize())

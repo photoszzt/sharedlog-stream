@@ -2,6 +2,7 @@ package commtypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 )
 
@@ -9,7 +10,25 @@ type EpochMarkerJSONSerdeG struct {
 	DefaultJSONSerde
 }
 
+func (s EpochMarkerJSONSerdeG) String() string {
+	return "EpochMarkerJSONSerdeG"
+}
+
+var _ = fmt.Stringer(EpochMarkerJSONSerdeG{})
+
 var _ = SerdeG[EpochMarker](EpochMarkerJSONSerdeG{})
+
+type EpochMarkerMsgpSerdeG struct {
+	DefaultMsgpSerde
+}
+
+func (s EpochMarkerMsgpSerdeG) String() string {
+	return "EpochMarkerMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(EpochMarkerMsgpSerdeG{})
+
+var _ = SerdeG[EpochMarker](EpochMarkerMsgpSerdeG{})
 
 func (s EpochMarkerJSONSerdeG) Encode(value EpochMarker) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -23,12 +42,6 @@ func (s EpochMarkerJSONSerdeG) Decode(value []byte) (EpochMarker, error) {
 	}
 	return v, nil
 }
-
-type EpochMarkerMsgpSerdeG struct {
-	DefaultMsgpSerde
-}
-
-var _ = SerdeG[EpochMarker](EpochMarkerMsgpSerdeG{})
 
 func (s EpochMarkerMsgpSerdeG) Encode(value EpochMarker) ([]byte, *[]byte, error) {
 	b := PopBuffer(value.Msgsize())

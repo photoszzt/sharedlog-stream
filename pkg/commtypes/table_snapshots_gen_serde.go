@@ -2,12 +2,19 @@ package commtypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 )
 
 type TableSnapshotsJSONSerde struct {
 	DefaultJSONSerde
 }
+
+func (s TableSnapshotsJSONSerde) String() string {
+	return "TableSnapshotsJSONSerde"
+}
+
+var _ = fmt.Stringer(TableSnapshotsJSONSerde{})
 
 var _ = Serde(TableSnapshotsJSONSerde{})
 
@@ -34,6 +41,12 @@ type TableSnapshotsMsgpSerde struct {
 }
 
 var _ = Serde(TableSnapshotsMsgpSerde{})
+
+func (s TableSnapshotsMsgpSerde) String() string {
+	return "TableSnapshotsMsgpSerde"
+}
+
+var _ = fmt.Stringer(TableSnapshotsMsgpSerde{})
 
 func (s TableSnapshotsMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	v, ok := value.(*TableSnapshots)

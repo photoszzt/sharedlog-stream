@@ -2,6 +2,7 @@ package commtypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 )
 
@@ -9,7 +10,25 @@ type TimeWindowJSONSerdeG struct {
 	DefaultJSONSerde
 }
 
+func (s TimeWindowJSONSerdeG) String() string {
+	return "TimeWindowJSONSerdeG"
+}
+
+var _ = fmt.Stringer(TimeWindowJSONSerdeG{})
+
 var _ = SerdeG[TimeWindow](TimeWindowJSONSerdeG{})
+
+type TimeWindowMsgpSerdeG struct {
+	DefaultMsgpSerde
+}
+
+func (s TimeWindowMsgpSerdeG) String() string {
+	return "TimeWindowMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(TimeWindowMsgpSerdeG{})
+
+var _ = SerdeG[TimeWindow](TimeWindowMsgpSerdeG{})
 
 func (s TimeWindowJSONSerdeG) Encode(value TimeWindow) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -23,12 +42,6 @@ func (s TimeWindowJSONSerdeG) Decode(value []byte) (TimeWindow, error) {
 	}
 	return v, nil
 }
-
-type TimeWindowMsgpSerdeG struct {
-	DefaultMsgpSerde
-}
-
-var _ = SerdeG[TimeWindow](TimeWindowMsgpSerdeG{})
 
 func (s TimeWindowMsgpSerdeG) Encode(value TimeWindow) ([]byte, *[]byte, error) {
 	b := PopBuffer(value.Msgsize())

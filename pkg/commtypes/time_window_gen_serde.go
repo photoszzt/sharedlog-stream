@@ -2,12 +2,19 @@ package commtypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 )
 
 type TimeWindowJSONSerde struct {
 	DefaultJSONSerde
 }
+
+func (s TimeWindowJSONSerde) String() string {
+	return "TimeWindowJSONSerde"
+}
+
+var _ = fmt.Stringer(TimeWindowJSONSerde{})
 
 var _ = Serde(TimeWindowJSONSerde{})
 
@@ -34,6 +41,12 @@ type TimeWindowMsgpSerde struct {
 }
 
 var _ = Serde(TimeWindowMsgpSerde{})
+
+func (s TimeWindowMsgpSerde) String() string {
+	return "TimeWindowMsgpSerde"
+}
+
+var _ = fmt.Stringer(TimeWindowMsgpSerde{})
 
 func (s TimeWindowMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	v, ok := value.(*TimeWindow)

@@ -2,6 +2,7 @@ package commtypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 )
 
@@ -9,7 +10,25 @@ type TableSnapshotsJSONSerdeG struct {
 	DefaultJSONSerde
 }
 
+func (s TableSnapshotsJSONSerdeG) String() string {
+	return "TableSnapshotsJSONSerdeG"
+}
+
+var _ = fmt.Stringer(TableSnapshotsJSONSerdeG{})
+
 var _ = SerdeG[TableSnapshots](TableSnapshotsJSONSerdeG{})
+
+type TableSnapshotsMsgpSerdeG struct {
+	DefaultMsgpSerde
+}
+
+func (s TableSnapshotsMsgpSerdeG) String() string {
+	return "TableSnapshotsMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(TableSnapshotsMsgpSerdeG{})
+
+var _ = SerdeG[TableSnapshots](TableSnapshotsMsgpSerdeG{})
 
 func (s TableSnapshotsJSONSerdeG) Encode(value TableSnapshots) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -23,12 +42,6 @@ func (s TableSnapshotsJSONSerdeG) Decode(value []byte) (TableSnapshots, error) {
 	}
 	return v, nil
 }
-
-type TableSnapshotsMsgpSerdeG struct {
-	DefaultMsgpSerde
-}
-
-var _ = SerdeG[TableSnapshots](TableSnapshotsMsgpSerdeG{})
 
 func (s TableSnapshotsMsgpSerdeG) Encode(value TableSnapshots) ([]byte, *[]byte, error) {
 	b := PopBuffer(value.Msgsize())

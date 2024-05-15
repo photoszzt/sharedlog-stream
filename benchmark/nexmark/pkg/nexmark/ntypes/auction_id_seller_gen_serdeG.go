@@ -2,6 +2,7 @@ package ntypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -10,7 +11,25 @@ type AuctionIdSellerJSONSerdeG struct {
 	commtypes.DefaultJSONSerde
 }
 
+func (s AuctionIdSellerJSONSerdeG) String() string {
+	return "AuctionIdSellerJSONSerdeG"
+}
+
+var _ = fmt.Stringer(AuctionIdSellerJSONSerdeG{})
+
 var _ = commtypes.SerdeG[AuctionIdSeller](AuctionIdSellerJSONSerdeG{})
+
+type AuctionIdSellerMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
+
+func (s AuctionIdSellerMsgpSerdeG) String() string {
+	return "AuctionIdSellerMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(AuctionIdSellerMsgpSerdeG{})
+
+var _ = commtypes.SerdeG[AuctionIdSeller](AuctionIdSellerMsgpSerdeG{})
 
 func (s AuctionIdSellerJSONSerdeG) Encode(value AuctionIdSeller) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -24,12 +43,6 @@ func (s AuctionIdSellerJSONSerdeG) Decode(value []byte) (AuctionIdSeller, error)
 	}
 	return v, nil
 }
-
-type AuctionIdSellerMsgpSerdeG struct {
-	commtypes.DefaultMsgpSerde
-}
-
-var _ = commtypes.SerdeG[AuctionIdSeller](AuctionIdSellerMsgpSerdeG{})
 
 func (s AuctionIdSellerMsgpSerdeG) Encode(value AuctionIdSeller) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer(value.Msgsize())

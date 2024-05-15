@@ -2,6 +2,7 @@ package datatype
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -9,6 +10,12 @@ import (
 type PayloadTsJSONSerde struct {
 	commtypes.DefaultJSONSerde
 }
+
+func (s PayloadTsJSONSerde) String() string {
+	return "PayloadTsJSONSerde"
+}
+
+var _ = fmt.Stringer(PayloadTsJSONSerde{})
 
 var _ = commtypes.Serde(PayloadTsJSONSerde{})
 
@@ -35,6 +42,12 @@ type PayloadTsMsgpSerde struct {
 }
 
 var _ = commtypes.Serde(PayloadTsMsgpSerde{})
+
+func (s PayloadTsMsgpSerde) String() string {
+	return "PayloadTsMsgpSerde"
+}
+
+var _ = fmt.Stringer(PayloadTsMsgpSerde{})
 
 func (s PayloadTsMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	v, ok := value.(*PayloadTs)

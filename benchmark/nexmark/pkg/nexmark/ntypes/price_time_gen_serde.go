@@ -2,6 +2,7 @@ package ntypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -9,6 +10,12 @@ import (
 type PriceTimeJSONSerde struct {
 	commtypes.DefaultJSONSerde
 }
+
+func (s PriceTimeJSONSerde) String() string {
+	return "PriceTimeJSONSerde"
+}
+
+var _ = fmt.Stringer(PriceTimeJSONSerde{})
 
 var _ = commtypes.Serde(PriceTimeJSONSerde{})
 
@@ -35,6 +42,12 @@ type PriceTimeMsgpSerde struct {
 }
 
 var _ = commtypes.Serde(PriceTimeMsgpSerde{})
+
+func (s PriceTimeMsgpSerde) String() string {
+	return "PriceTimeMsgpSerde"
+}
+
+var _ = fmt.Stringer(PriceTimeMsgpSerde{})
 
 func (s PriceTimeMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	v, ok := value.(*PriceTime)

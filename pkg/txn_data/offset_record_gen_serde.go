@@ -2,6 +2,7 @@ package txn_data
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -9,6 +10,12 @@ import (
 type OffsetRecordJSONSerde struct {
 	commtypes.DefaultJSONSerde
 }
+
+func (s OffsetRecordJSONSerde) String() string {
+	return "OffsetRecordJSONSerde"
+}
+
+var _ = fmt.Stringer(OffsetRecordJSONSerde{})
 
 var _ = commtypes.Serde(OffsetRecordJSONSerde{})
 
@@ -35,6 +42,12 @@ type OffsetRecordMsgpSerde struct {
 }
 
 var _ = commtypes.Serde(OffsetRecordMsgpSerde{})
+
+func (s OffsetRecordMsgpSerde) String() string {
+	return "OffsetRecordMsgpSerde"
+}
+
+var _ = fmt.Stringer(OffsetRecordMsgpSerde{})
 
 func (s OffsetRecordMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	v, ok := value.(*OffsetRecord)

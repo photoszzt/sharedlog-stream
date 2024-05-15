@@ -2,6 +2,7 @@ package ntypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -9,6 +10,12 @@ import (
 type SumAndCountJSONSerde struct {
 	commtypes.DefaultJSONSerde
 }
+
+func (s SumAndCountJSONSerde) String() string {
+	return "SumAndCountJSONSerde"
+}
+
+var _ = fmt.Stringer(SumAndCountJSONSerde{})
 
 var _ = commtypes.Serde(SumAndCountJSONSerde{})
 
@@ -35,6 +42,12 @@ type SumAndCountMsgpSerde struct {
 }
 
 var _ = commtypes.Serde(SumAndCountMsgpSerde{})
+
+func (s SumAndCountMsgpSerde) String() string {
+	return "SumAndCountMsgpSerde"
+}
+
+var _ = fmt.Stringer(SumAndCountMsgpSerde{})
 
 func (s SumAndCountMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	v, ok := value.(*SumAndCount)

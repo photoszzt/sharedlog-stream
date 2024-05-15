@@ -1,6 +1,9 @@
 package commtypes
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type WindowedKeyJSONSerdeG struct {
 	DefaultJSONSerde
@@ -9,6 +12,10 @@ type WindowedKeyJSONSerdeG struct {
 }
 
 var _ = SerdeG[WindowedKey](WindowedKeyJSONSerdeG{})
+
+func (s WindowedKeyJSONSerdeG) String() string {
+	return fmt.Sprintf("WindowedKeyJSONSerdeG{key: %s, win: %s}", s.KeyJSONSerde.String(), s.WindowJSONSerde.String())
+}
 
 func (s WindowedKeyJSONSerdeG) Encode(value WindowedKey) ([]byte, *[]byte, error) {
 	wk, kbuf, wbuf, err := winKeyToWindowedKeySer(value, s.KeyJSONSerde, s.WindowJSONSerde)
@@ -49,6 +56,10 @@ type WindowedKeyMsgpSerdeG struct {
 }
 
 var _ = SerdeG[WindowedKey](WindowedKeyMsgpSerdeG{})
+
+func (s WindowedKeyMsgpSerdeG) String() string {
+	return fmt.Sprintf("WindowedKeyMsgpSerdeG{key: %s, win: %s}", s.KeyMsgpSerde.String(), s.WindowMsgpSerde.String())
+}
 
 func (s WindowedKeyMsgpSerdeG) Encode(value WindowedKey) ([]byte, *[]byte, error) {
 	wk, kbuf, wbuf, err := winKeyToWindowedKeySer(value, s.KeyMsgpSerde, s.WindowMsgpSerde)

@@ -2,6 +2,7 @@ package txn_data
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -10,7 +11,25 @@ type OffsetRecordJSONSerdeG struct {
 	commtypes.DefaultJSONSerde
 }
 
+func (s OffsetRecordJSONSerdeG) String() string {
+	return "OffsetRecordJSONSerdeG"
+}
+
+var _ = fmt.Stringer(OffsetRecordJSONSerdeG{})
+
 var _ = commtypes.SerdeG[OffsetRecord](OffsetRecordJSONSerdeG{})
+
+type OffsetRecordMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
+
+func (s OffsetRecordMsgpSerdeG) String() string {
+	return "OffsetRecordMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(OffsetRecordMsgpSerdeG{})
+
+var _ = commtypes.SerdeG[OffsetRecord](OffsetRecordMsgpSerdeG{})
 
 func (s OffsetRecordJSONSerdeG) Encode(value OffsetRecord) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -24,12 +43,6 @@ func (s OffsetRecordJSONSerdeG) Decode(value []byte) (OffsetRecord, error) {
 	}
 	return v, nil
 }
-
-type OffsetRecordMsgpSerdeG struct {
-	commtypes.DefaultMsgpSerde
-}
-
-var _ = commtypes.SerdeG[OffsetRecord](OffsetRecordMsgpSerdeG{})
 
 func (s OffsetRecordMsgpSerdeG) Encode(value OffsetRecord) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer(value.Msgsize())

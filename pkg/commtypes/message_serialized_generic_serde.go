@@ -91,6 +91,10 @@ type MessageGMsgpSerdeG[K, V any] struct {
 
 var _ MessageGSerdeG[int, int] = MessageGMsgpSerdeG[int, int]{}
 
+func (s MessageGMsgpSerdeG[K, V]) String() string {
+	return fmt.Sprintf("MessageGMsgpSerdeG{key: %s, val: %s}", s.keySerde.String(), s.valSerde.String())
+}
+
 func (s MessageGMsgpSerdeG[K, V]) Encode(val MessageG[K, V]) ([]byte, *[]byte, error) {
 	msgSerOp, kbuf, vbuf, err := MsgGToMsgSer(val, s.keySerde, s.valSerde)
 	if err != nil {
@@ -158,6 +162,10 @@ type MessageGJSONSerdeG[K, V any] struct {
 }
 
 var _ MessageGSerdeG[int, int] = MessageGJSONSerdeG[int, int]{}
+
+func (s MessageGJSONSerdeG[K, V]) String() string {
+	return fmt.Sprintf("MessageGJSONSerdeG{key: %s, val: %s}", s.KeySerde.String(), s.ValSerde.String())
+}
 
 func (s MessageGJSONSerdeG[K, V]) Encode(value MessageG[K, V]) ([]byte, *[]byte, error) {
 	msgSerOp, kbuf, vbuf, err := MsgGToMsgSer(value, s.KeySerde, s.ValSerde)

@@ -2,6 +2,7 @@ package ntypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -10,7 +11,25 @@ type AuctionIdCntMaxJSONSerdeG struct {
 	commtypes.DefaultJSONSerde
 }
 
+func (s AuctionIdCntMaxJSONSerdeG) String() string {
+	return "AuctionIdCntMaxJSONSerdeG"
+}
+
+var _ = fmt.Stringer(AuctionIdCntMaxJSONSerdeG{})
+
 var _ = commtypes.SerdeG[AuctionIdCntMax](AuctionIdCntMaxJSONSerdeG{})
+
+type AuctionIdCntMaxMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
+
+func (s AuctionIdCntMaxMsgpSerdeG) String() string {
+	return "AuctionIdCntMaxMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(AuctionIdCntMaxMsgpSerdeG{})
+
+var _ = commtypes.SerdeG[AuctionIdCntMax](AuctionIdCntMaxMsgpSerdeG{})
 
 func (s AuctionIdCntMaxJSONSerdeG) Encode(value AuctionIdCntMax) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -24,12 +43,6 @@ func (s AuctionIdCntMaxJSONSerdeG) Decode(value []byte) (AuctionIdCntMax, error)
 	}
 	return v, nil
 }
-
-type AuctionIdCntMaxMsgpSerdeG struct {
-	commtypes.DefaultMsgpSerde
-}
-
-var _ = commtypes.SerdeG[AuctionIdCntMax](AuctionIdCntMaxMsgpSerdeG{})
 
 func (s AuctionIdCntMaxMsgpSerdeG) Encode(value AuctionIdCntMax) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer(value.Msgsize())

@@ -2,6 +2,7 @@ package ntypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -10,7 +11,25 @@ type PriceTimeJSONSerdeG struct {
 	commtypes.DefaultJSONSerde
 }
 
+func (s PriceTimeJSONSerdeG) String() string {
+	return "PriceTimeJSONSerdeG"
+}
+
+var _ = fmt.Stringer(PriceTimeJSONSerdeG{})
+
 var _ = commtypes.SerdeG[PriceTime](PriceTimeJSONSerdeG{})
+
+type PriceTimeMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
+
+func (s PriceTimeMsgpSerdeG) String() string {
+	return "PriceTimeMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(PriceTimeMsgpSerdeG{})
+
+var _ = commtypes.SerdeG[PriceTime](PriceTimeMsgpSerdeG{})
 
 func (s PriceTimeJSONSerdeG) Encode(value PriceTime) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -24,12 +43,6 @@ func (s PriceTimeJSONSerdeG) Decode(value []byte) (PriceTime, error) {
 	}
 	return v, nil
 }
-
-type PriceTimeMsgpSerdeG struct {
-	commtypes.DefaultMsgpSerde
-}
-
-var _ = commtypes.SerdeG[PriceTime](PriceTimeMsgpSerdeG{})
 
 func (s PriceTimeMsgpSerdeG) Encode(value PriceTime) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer(value.Msgsize())

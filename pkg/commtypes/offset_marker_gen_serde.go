@@ -2,12 +2,19 @@ package commtypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 )
 
 type OffsetMarkerJSONSerde struct {
 	DefaultJSONSerde
 }
+
+func (s OffsetMarkerJSONSerde) String() string {
+	return "OffsetMarkerJSONSerde"
+}
+
+var _ = fmt.Stringer(OffsetMarkerJSONSerde{})
 
 var _ = Serde(OffsetMarkerJSONSerde{})
 
@@ -34,6 +41,12 @@ type OffsetMarkerMsgpSerde struct {
 }
 
 var _ = Serde(OffsetMarkerMsgpSerde{})
+
+func (s OffsetMarkerMsgpSerde) String() string {
+	return "OffsetMarkerMsgpSerde"
+}
+
+var _ = fmt.Stringer(OffsetMarkerMsgpSerde{})
 
 func (s OffsetMarkerMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	v, ok := value.(*OffsetMarker)

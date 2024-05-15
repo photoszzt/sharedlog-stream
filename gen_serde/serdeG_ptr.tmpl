@@ -1,6 +1,7 @@
 package {{.PackageName}}
 
 import (
+	"fmt"
 	"encoding/json"
 	"sharedlog-stream/pkg/common_errors"
 	{{.ExtraImports}}
@@ -10,7 +11,26 @@ type {{.TypeName}}JSONSerdeG struct {
 	{{.CommtypesPrefix}}DefaultJSONSerde
 }
 
+func (s {{.TypeName}}JSONSerdeG) String() string {
+	return "{{.TypeName}}JSONSerdeG"
+}
+
+var _ = fmt.Stringer({{.TypeName}}JSONSerdeG{})
+
 var _ = {{.CommtypesPrefix}}SerdeG[*{{.TypeName}}]({{.TypeName}}JSONSerdeG{})
+
+type {{.TypeName}}MsgpSerdeG struct {
+	{{.CommtypesPrefix}}DefaultMsgpSerde
+}
+
+func (s {{.TypeName}}MsgpSerdeG) String() string {
+	return "{{.TypeName}}MsgpSerdeG"
+}
+
+var _ = fmt.Stringer({{.TypeName}}MsgpSerdeG{})
+
+var _ = {{.CommtypesPrefix}}SerdeG[*{{.TypeName}}]({{.TypeName}}MsgpSerdeG{})
+
 
 func (s {{.TypeName}}JSONSerdeG) Encode(value *{{.TypeName}}) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -24,12 +44,6 @@ func (s {{.TypeName}}JSONSerdeG) Decode(value []byte) (*{{.TypeName}}, error) {
 	}
 	return &v, nil
 }
-
-type {{.TypeName}}MsgpSerdeG struct {
-	{{.CommtypesPrefix}}DefaultMsgpSerde
-}
-
-var _ = {{.CommtypesPrefix}}SerdeG[*{{.TypeName}}]({{.TypeName}}MsgpSerdeG{})
 
 func (s {{.TypeName}}MsgpSerdeG) Encode(value *{{.TypeName}}) ([]byte, *[]byte, error) {
 	b := {{.CommtypesPrefix}}PopBuffer(value.Msgsize())

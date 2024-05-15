@@ -2,12 +2,19 @@ package commtypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 )
 
 type CheckpointJSONSerde struct {
 	DefaultJSONSerde
 }
+
+func (s CheckpointJSONSerde) String() string {
+	return "CheckpointJSONSerde"
+}
+
+var _ = fmt.Stringer(CheckpointJSONSerde{})
 
 var _ = Serde(CheckpointJSONSerde{})
 
@@ -34,6 +41,12 @@ type CheckpointMsgpSerde struct {
 }
 
 var _ = Serde(CheckpointMsgpSerde{})
+
+func (s CheckpointMsgpSerde) String() string {
+	return "CheckpointMsgpSerde"
+}
+
+var _ = fmt.Stringer(CheckpointMsgpSerde{})
 
 func (s CheckpointMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	v, ok := value.(*Checkpoint)

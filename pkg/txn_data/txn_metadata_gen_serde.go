@@ -2,6 +2,7 @@ package txn_data
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -9,6 +10,12 @@ import (
 type TxnMetadataJSONSerde struct {
 	commtypes.DefaultJSONSerde
 }
+
+func (s TxnMetadataJSONSerde) String() string {
+	return "TxnMetadataJSONSerde"
+}
+
+var _ = fmt.Stringer(TxnMetadataJSONSerde{})
 
 var _ = commtypes.Serde(TxnMetadataJSONSerde{})
 
@@ -35,6 +42,12 @@ type TxnMetadataMsgpSerde struct {
 }
 
 var _ = commtypes.Serde(TxnMetadataMsgpSerde{})
+
+func (s TxnMetadataMsgpSerde) String() string {
+	return "TxnMetadataMsgpSerde"
+}
+
+var _ = fmt.Stringer(TxnMetadataMsgpSerde{})
 
 func (s TxnMetadataMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	v, ok := value.(*TxnMetadata)

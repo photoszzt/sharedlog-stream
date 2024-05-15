@@ -2,6 +2,7 @@ package remote_txn_rpc
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -9,6 +10,12 @@ import (
 type RTxnReplyJSONSerde struct {
 	commtypes.DefaultJSONSerde
 }
+
+func (s RTxnReplyJSONSerde) String() string {
+	return "RTxnReplyJSONSerde"
+}
+
+var _ = fmt.Stringer(RTxnReplyJSONSerde{})
 
 var _ = commtypes.Serde(RTxnReplyJSONSerde{})
 
@@ -33,6 +40,12 @@ func (s RTxnReplyJSONSerde) Decode(value []byte) (interface{}, error) {
 type RTxnReplyMsgpSerde struct {
 	commtypes.DefaultMsgpSerde
 }
+
+func (s RTxnReplyMsgpSerde) String() string {
+	return "RTxnReplyMsgpSerde"
+}
+
+var _ = fmt.Stringer(RTxnReplyMsgpSerde{})
 
 var _ = commtypes.Serde(RTxnReplyMsgpSerde{})
 

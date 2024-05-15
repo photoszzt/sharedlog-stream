@@ -2,12 +2,19 @@ package commtypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 )
 
 type MessageSerializedJSONSerde struct {
 	DefaultJSONSerde
 }
+
+func (s MessageSerializedJSONSerde) String() string {
+	return "MessageSerializedJSONSerde"
+}
+
+var _ = fmt.Stringer(MessageSerializedJSONSerde{})
 
 var _ = Serde(MessageSerializedJSONSerde{})
 
@@ -34,6 +41,12 @@ type MessageSerializedMsgpSerde struct {
 }
 
 var _ = Serde(MessageSerializedMsgpSerde{})
+
+func (s MessageSerializedMsgpSerde) String() string {
+	return "MessageSerializedMsgpSerde"
+}
+
+var _ = fmt.Stringer(MessageSerializedMsgpSerde{})
 
 func (s MessageSerializedMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	v, ok := value.(*MessageSerialized)

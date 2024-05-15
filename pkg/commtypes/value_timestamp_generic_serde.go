@@ -14,6 +14,10 @@ type ValueTimestampJSONSerdeG struct {
 
 var _ = SerdeG[ValueTimestamp](ValueTimestampJSONSerdeG{})
 
+func (s ValueTimestampJSONSerdeG) String() string {
+	return fmt.Sprintf("ValueTimestampJSONSerdeG{val: %s}", s.ValJSONSerde.String())
+}
+
 func (s ValueTimestampJSONSerdeG) Encode(value ValueTimestamp) ([]byte, *[]byte, error) {
 	vs, vbuf, err := valTsToValueTsSer(value, s.ValJSONSerde)
 	defer func() {
@@ -46,6 +50,10 @@ func (s ValueTimestampJSONSerdeG) Decode(value []byte) (ValueTimestamp, error) {
 type ValueTimestampMsgpSerdeG struct {
 	DefaultMsgpSerde
 	ValMsgpSerde Serde
+}
+
+func (s ValueTimestampMsgpSerdeG) String() string {
+	return fmt.Sprintf("ValueTimestampMsgpSerdeG{val: %s}", s.ValMsgpSerde.String())
 }
 
 func (s ValueTimestampMsgpSerdeG) Encode(value ValueTimestamp) ([]byte, *[]byte, error) {
@@ -191,6 +199,10 @@ type ValueTimestampGJSONSerdeG[V any] struct {
 	ValJSONSerde SerdeG[V]
 }
 
+func (s ValueTimestampGJSONSerdeG[V]) String() string {
+	return fmt.Sprintf("ValueTimestampGJSONSerdeG{val: %s}", s.ValJSONSerde.String())
+}
+
 func (s ValueTimestampGJSONSerdeG[V]) Encode(value ValueTimestampG[V]) ([]byte, *[]byte, error) {
 	vs, vbuf, err := valTsGToValueTsSer(value, s.ValJSONSerde)
 	defer func() {
@@ -223,6 +235,10 @@ func (s ValueTimestampGJSONSerdeG[V]) Decode(value []byte) (ValueTimestampG[V], 
 type ValueTimestampGMsgpSerdeG[V any] struct {
 	DefaultMsgpSerde
 	ValMsgpSerde SerdeG[V]
+}
+
+func (s ValueTimestampGMsgpSerdeG[V]) String() string {
+	return fmt.Sprintf("ValueTimestampGMsgpSerdeG{val: %s}", s.ValMsgpSerde.String())
 }
 
 func (s ValueTimestampGMsgpSerdeG[V]) Encode(value ValueTimestampG[V]) ([]byte, *[]byte, error) {

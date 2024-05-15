@@ -2,6 +2,7 @@ package txn_data
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -10,7 +11,25 @@ type TxnMetadataJSONSerdeG struct {
 	commtypes.DefaultJSONSerde
 }
 
+func (s TxnMetadataJSONSerdeG) String() string {
+	return "TxnMetadataJSONSerdeG"
+}
+
+var _ = fmt.Stringer(TxnMetadataJSONSerdeG{})
+
 var _ = commtypes.SerdeG[TxnMetadata](TxnMetadataJSONSerdeG{})
+
+type TxnMetadataMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
+
+func (s TxnMetadataMsgpSerdeG) String() string {
+	return "TxnMetadataMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(TxnMetadataMsgpSerdeG{})
+
+var _ = commtypes.SerdeG[TxnMetadata](TxnMetadataMsgpSerdeG{})
 
 func (s TxnMetadataJSONSerdeG) Encode(value TxnMetadata) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -24,12 +43,6 @@ func (s TxnMetadataJSONSerdeG) Decode(value []byte) (TxnMetadata, error) {
 	}
 	return v, nil
 }
-
-type TxnMetadataMsgpSerdeG struct {
-	commtypes.DefaultMsgpSerde
-}
-
-var _ = commtypes.SerdeG[TxnMetadata](TxnMetadataMsgpSerdeG{})
 
 func (s TxnMetadataMsgpSerdeG) Encode(value TxnMetadata) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer(value.Msgsize())

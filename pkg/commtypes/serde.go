@@ -1,8 +1,9 @@
-//go:generate stringer -type=SerdeFormat
+//go:generate stringer -type=SerdeFormat,Float64SerdeG
 package commtypes
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"reflect"
 	"sharedlog-stream/pkg/optional"
@@ -131,12 +132,14 @@ type Serde interface {
 	Encoder
 	Decoder
 	UsedBufferPool() bool
+	fmt.Stringer
 }
 
 type SerdeG[V any] interface {
 	EncoderG[V]
 	DecoderG[V]
 	UsedBufferPool() bool
+	fmt.Stringer
 }
 
 type (
@@ -219,10 +222,12 @@ type Float64SerdeG struct {
 
 func (Float64SerdeG) UsedBufferPool() bool { return true }
 func (Float64Serde) UsedBufferPool() bool  { return true }
+func (Float64SerdeG) String() string       { return "Float64SerdeG" }
+func (Float64Serde) String() string        { return "Float64Serde" }
 
 var (
-	_ = Serde(&Float64Serde{})
-	_ = SerdeG[float64](&Float64SerdeG{})
+	_ = Serde(Float64Serde{})
+	_ = SerdeG[float64](Float64SerdeG{})
 )
 
 type (
@@ -304,12 +309,14 @@ type Float32SerdeG struct {
 }
 
 var (
-	_ = Serde(&Float32Serde{})
-	_ = SerdeG[float32](&Float32SerdeG{})
+	_ = Serde(Float32Serde{})
+	_ = SerdeG[float32](Float32SerdeG{})
 )
 
 func (Float32SerdeG) UsedBufferPool() bool { return true }
 func (Float32Serde) UsedBufferPool() bool  { return true }
+func (Float32SerdeG) String() string       { return "Float32SerdeG" }
+func (Float32Serde) String() string        { return "Float32Serde" }
 
 type (
 	Uint64Encoder struct {
@@ -389,10 +396,12 @@ type Uint64SerdeG struct {
 
 func (Uint64SerdeG) UsedBufferPool() bool { return true }
 func (Uint64Serde) UsedBufferPool() bool  { return true }
+func (Uint64SerdeG) String() string       { return "Uint64SerdeG" }
+func (Uint64Serde) String() string        { return "Uint64Serde" }
 
 var (
-	_ = Serde(&Uint64Serde{})
-	_ = SerdeG[uint64](&Uint64SerdeG{})
+	_ = Serde(Uint64Serde{})
+	_ = SerdeG[uint64](Uint64SerdeG{})
 )
 
 type (
@@ -405,8 +414,8 @@ type (
 )
 
 var (
-	_ = Encoder(&Int64Encoder{})
-	_ = EncoderG[int64](&Int64EncoderG{})
+	_ = Encoder(Int64Encoder{})
+	_ = EncoderG[int64](Int64EncoderG{})
 )
 
 func (e Int64Encoder) Encode(value interface{}) ([]byte, *[]byte, error) {
@@ -473,10 +482,12 @@ type Int64SerdeG struct {
 
 func (Int64SerdeG) UsedBufferPool() bool { return true }
 func (Int64Serde) UsedBufferPool() bool  { return true }
+func (Int64SerdeG) String() string       { return "Int64SerdeG" }
+func (Int64Serde) String() string        { return "Int64Serde" }
 
 var (
-	_ = Serde(&Int64Serde{})
-	_ = SerdeG[int64](&Int64SerdeG{})
+	_ = Serde(Int64Serde{})
+	_ = SerdeG[int64](Int64SerdeG{})
 )
 
 type (
@@ -556,12 +567,14 @@ type Uint32SerdeG struct {
 }
 
 var (
-	_ = Serde(&Uint32Serde{})
-	_ = SerdeG[uint32](&Uint32SerdeG{})
+	_ = Serde(Uint32Serde{})
+	_ = SerdeG[uint32](Uint32SerdeG{})
 )
 
 func (Uint32SerdeG) UsedBufferPool() bool { return true }
 func (Uint32Serde) UsedBufferPool() bool  { return true }
+func (Uint32SerdeG) String() string       { return "Uint32SerdeG" }
+func (Uint32Serde) String() string        { return "Uint32Serde" }
 
 type (
 	Int32Encoder struct {
@@ -640,12 +653,14 @@ type Int32SerdeG struct {
 }
 
 var (
-	_ = Serde(&Int32Serde{})
-	_ = SerdeG[int32](&Int32SerdeG{})
+	_ = Serde(Int32Serde{})
+	_ = SerdeG[int32](Int32SerdeG{})
 )
 
 func (Int32SerdeG) UsedBufferPool() bool { return true }
 func (Int32Serde) UsedBufferPool() bool  { return true }
+func (Int32SerdeG) String() string       { return "Int32SerdeG" }
+func (Int32Serde) String() string        { return "Int32Serde" }
 
 type (
 	IntSerde struct {
@@ -663,6 +678,8 @@ var (
 
 func (IntSerdeG) UsedBufferPool() bool { return true }
 func (IntSerde) UsedBufferPool() bool  { return true }
+func (IntSerdeG) String() string       { return "IntSerdeG" }
+func (IntSerde) String() string        { return "IntSerde" }
 
 func (s IntSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	if value == nil {
@@ -781,6 +798,8 @@ var (
 
 func (Uint16SerdeG) UsedBufferPool() bool { return false }
 func (Uint16Serde) UsedBufferPool() bool  { return false }
+func (Uint16SerdeG) String() string       { return "Uint16SerdeG" }
+func (Uint16Serde) String() string        { return "Uint16Serde" }
 
 type (
 	Int16Encoder  struct{}
@@ -852,6 +871,8 @@ type Int16SerdeG struct {
 
 func (Int16SerdeG) UsedBufferPool() bool { return false }
 func (Int16Serde) UsedBufferPool() bool  { return false }
+func (Int16SerdeG) String() string       { return "Int16SerdeG" }
+func (Int16Serde) String() string        { return "Int16Serde" }
 
 var (
 	_ = Serde(Int16Serde{})
@@ -925,12 +946,14 @@ type Uint8SerdeG struct {
 }
 
 var (
-	_ = Serde(&Uint8Serde{})
-	_ = SerdeG[uint8](&Uint8SerdeG{})
+	_ = Serde(Uint8Serde{})
+	_ = SerdeG[uint8](Uint8SerdeG{})
 )
 
 func (Uint8SerdeG) UsedBufferPool() bool { return false }
 func (Uint8Serde) UsedBufferPool() bool  { return false }
+func (Uint8SerdeG) String() string       { return "Uint8SerdeG" }
+func (Uint8Serde) String() string        { return "Uint8Serde" }
 
 type (
 	Int8Encoder  struct{}
@@ -999,12 +1022,14 @@ type Int8SerdeG struct {
 }
 
 var (
-	_ = Serde(&Int8Serde{})
-	_ = SerdeG[int8](&Int8SerdeG{})
+	_ = Serde(Int8Serde{})
+	_ = SerdeG[int8](Int8SerdeG{})
 )
 
 func (Int8SerdeG) UsedBufferPool() bool { return false }
 func (Int8Serde) UsedBufferPool() bool  { return false }
+func (Int8SerdeG) String() string       { return "Int8SerdeG" }
+func (Int8Serde) String() string        { return "Int8Serde" }
 
 // From gvisor: https://cs.opensource.google/gvisor/gvisor/+/master:pkg/gohacks/string_go120_unsafe.go;l=23-39
 // ImmutableBytesFromString is equivalent to []byte(s), except that it uses the
@@ -1088,20 +1113,25 @@ var (
 
 func (StringSerdeG) UsedBufferPool() bool { return false }
 func (StringSerde) UsedBufferPool() bool  { return false }
+func (StringSerdeG) String() string       { return "StringSerdeG" }
+func (StringSerde) String() string        { return "StringSerde" }
 
 type OptionalValSerde[V any] struct {
 	valSerde SerdeG[V]
 }
 
 func NewOptionalValSerde[V any](valSerde SerdeG[V]) SerdeG[optional.Option[V]] {
-	return &OptionalValSerde[V]{valSerde: valSerde}
+	return OptionalValSerde[V]{valSerde: valSerde}
 }
 
-func (s *OptionalValSerde[V]) UsedBufferPool() bool { return s.valSerde.UsedBufferPool() }
+func (s OptionalValSerde[V]) UsedBufferPool() bool { return s.valSerde.UsedBufferPool() }
+func (s OptionalValSerde[V]) String() string {
+	return fmt.Sprintf("OptionalValSerde{val: %s}", s.valSerde.String())
+}
 
-var _ = SerdeG[optional.Option[int]](&OptionalValSerde[int]{})
+var _ = SerdeG[optional.Option[int]](OptionalValSerde[int]{})
 
-func (s *OptionalValSerde[V]) Encode(value optional.Option[V]) ([]byte, *[]byte, error) {
+func (s OptionalValSerde[V]) Encode(value optional.Option[V]) ([]byte, *[]byte, error) {
 	v, ok := value.Take()
 	if ok {
 		return s.valSerde.Encode(v)
@@ -1110,7 +1140,7 @@ func (s *OptionalValSerde[V]) Encode(value optional.Option[V]) ([]byte, *[]byte,
 	}
 }
 
-func (s *OptionalValSerde[V]) Decode(val []byte) (optional.Option[V], error) {
+func (s OptionalValSerde[V]) Decode(val []byte) (optional.Option[V], error) {
 	if val == nil {
 		return optional.None[V](), nil
 	} else {
@@ -1199,7 +1229,7 @@ func GenTestEncodeDecode[V any](v V, t *testing.T, serdeG SerdeG[V], serde Serde
 		t.Logf("serdeG input %v, decoded %v\n", v, ret)
 		t.Fatal("encode and decode doesn't give same value")
 	}
-	if serdeG.UsedBufferPool() {
+	if serdeG.UsedBufferPool() && buf != nil {
 		*buf = bts
 		PushBuffer(buf)
 	}
@@ -1216,7 +1246,7 @@ func GenTestEncodeDecode[V any](v V, t *testing.T, serdeG SerdeG[V], serde Serde
 		t.Logf("serde input %v, decoded %v\n", v, ret)
 		t.Fatal("encode and decode doesn't give same value")
 	}
-	if serde.UsedBufferPool() {
+	if serde.UsedBufferPool() && buf != nil {
 		*buf = bts
 		PushBuffer(buf)
 	}

@@ -2,6 +2,7 @@ package ntypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -10,7 +11,25 @@ type BidAndMaxJSONSerdeG struct {
 	commtypes.DefaultJSONSerde
 }
 
+func (s BidAndMaxJSONSerdeG) String() string {
+	return "BidAndMaxJSONSerdeG"
+}
+
+var _ = fmt.Stringer(BidAndMaxJSONSerdeG{})
+
 var _ = commtypes.SerdeG[BidAndMax](BidAndMaxJSONSerdeG{})
+
+type BidAndMaxMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
+
+func (s BidAndMaxMsgpSerdeG) String() string {
+	return "BidAndMaxMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(BidAndMaxMsgpSerdeG{})
+
+var _ = commtypes.SerdeG[BidAndMax](BidAndMaxMsgpSerdeG{})
 
 func (s BidAndMaxJSONSerdeG) Encode(value BidAndMax) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -24,12 +43,6 @@ func (s BidAndMaxJSONSerdeG) Decode(value []byte) (BidAndMax, error) {
 	}
 	return v, nil
 }
-
-type BidAndMaxMsgpSerdeG struct {
-	commtypes.DefaultMsgpSerde
-}
-
-var _ = commtypes.SerdeG[BidAndMax](BidAndMaxMsgpSerdeG{})
 
 func (s BidAndMaxMsgpSerdeG) Encode(value BidAndMax) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer(value.Msgsize())

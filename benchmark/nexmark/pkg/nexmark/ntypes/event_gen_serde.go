@@ -2,6 +2,7 @@ package ntypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -9,6 +10,12 @@ import (
 type EventJSONSerde struct {
 	commtypes.DefaultJSONSerde
 }
+
+func (s EventJSONSerde) String() string {
+	return "EventJSONSerde"
+}
+
+var _ = fmt.Stringer(EventJSONSerde{})
 
 var _ = commtypes.Serde(EventJSONSerde{})
 
@@ -33,6 +40,12 @@ func (s EventJSONSerde) Decode(value []byte) (interface{}, error) {
 type EventMsgpSerde struct {
 	commtypes.DefaultMsgpSerde
 }
+
+func (s EventMsgpSerde) String() string {
+	return "EventMsgpSerde"
+}
+
+var _ = fmt.Stringer(EventMsgpSerde{})
 
 var _ = commtypes.Serde(EventMsgpSerde{})
 

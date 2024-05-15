@@ -2,6 +2,7 @@ package ntypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -9,6 +10,12 @@ import (
 type NameCityStateIdJSONSerde struct {
 	commtypes.DefaultJSONSerde
 }
+
+func (s NameCityStateIdJSONSerde) String() string {
+	return "NameCityStateIdJSONSerde"
+}
+
+var _ = fmt.Stringer(NameCityStateIdJSONSerde{})
 
 var _ = commtypes.Serde(NameCityStateIdJSONSerde{})
 
@@ -35,6 +42,12 @@ type NameCityStateIdMsgpSerde struct {
 }
 
 var _ = commtypes.Serde(NameCityStateIdMsgpSerde{})
+
+func (s NameCityStateIdMsgpSerde) String() string {
+	return "NameCityStateIdMsgpSerde"
+}
+
+var _ = fmt.Stringer(NameCityStateIdMsgpSerde{})
 
 func (s NameCityStateIdMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	v, ok := value.(*NameCityStateId)

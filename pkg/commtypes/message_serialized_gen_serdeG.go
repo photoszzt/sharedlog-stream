@@ -2,6 +2,7 @@ package commtypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 )
 
@@ -9,7 +10,25 @@ type MessageSerializedJSONSerdeG struct {
 	DefaultJSONSerde
 }
 
+func (s MessageSerializedJSONSerdeG) String() string {
+	return "MessageSerializedJSONSerdeG"
+}
+
+var _ = fmt.Stringer(MessageSerializedJSONSerdeG{})
+
 var _ = SerdeG[MessageSerialized](MessageSerializedJSONSerdeG{})
+
+type MessageSerializedMsgpSerdeG struct {
+	DefaultMsgpSerde
+}
+
+func (s MessageSerializedMsgpSerdeG) String() string {
+	return "MessageSerializedMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(MessageSerializedMsgpSerdeG{})
+
+var _ = SerdeG[MessageSerialized](MessageSerializedMsgpSerdeG{})
 
 func (s MessageSerializedJSONSerdeG) Encode(value MessageSerialized) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -23,12 +42,6 @@ func (s MessageSerializedJSONSerdeG) Decode(value []byte) (MessageSerialized, er
 	}
 	return v, nil
 }
-
-type MessageSerializedMsgpSerdeG struct {
-	DefaultMsgpSerde
-}
-
-var _ = SerdeG[MessageSerialized](MessageSerializedMsgpSerdeG{})
 
 func (s MessageSerializedMsgpSerdeG) Encode(value MessageSerialized) ([]byte, *[]byte, error) {
 	b := PopBuffer(value.Msgsize())

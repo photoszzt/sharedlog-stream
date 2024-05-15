@@ -2,6 +2,7 @@ package ntypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -10,7 +11,25 @@ type AuctionIdCategoryJSONSerdeG struct {
 	commtypes.DefaultJSONSerde
 }
 
+func (s AuctionIdCategoryJSONSerdeG) String() string {
+	return "AuctionIdCategoryJSONSerdeG"
+}
+
+var _ = fmt.Stringer(AuctionIdCategoryJSONSerdeG{})
+
 var _ = commtypes.SerdeG[AuctionIdCategory](AuctionIdCategoryJSONSerdeG{})
+
+type AuctionIdCategoryMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
+
+func (s AuctionIdCategoryMsgpSerdeG) String() string {
+	return "AuctionIdCategoryMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(AuctionIdCategoryMsgpSerdeG{})
+
+var _ = commtypes.SerdeG[AuctionIdCategory](AuctionIdCategoryMsgpSerdeG{})
 
 func (s AuctionIdCategoryJSONSerdeG) Encode(value AuctionIdCategory) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -24,12 +43,6 @@ func (s AuctionIdCategoryJSONSerdeG) Decode(value []byte) (AuctionIdCategory, er
 	}
 	return v, nil
 }
-
-type AuctionIdCategoryMsgpSerdeG struct {
-	commtypes.DefaultMsgpSerde
-}
-
-var _ = commtypes.SerdeG[AuctionIdCategory](AuctionIdCategoryMsgpSerdeG{})
 
 func (s AuctionIdCategoryMsgpSerdeG) Encode(value AuctionIdCategory) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer(value.Msgsize())

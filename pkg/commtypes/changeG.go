@@ -2,6 +2,7 @@ package commtypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/optional"
 )
@@ -83,7 +84,11 @@ func changeSerToChangeG[V any](val *ChangeSerialized, valSerde SerdeG[V]) (Chang
 	}, nil
 }
 
-var _ = SerdeG[ChangeG[int]](&ChangeGJSONSerdeG[int]{})
+var _ = SerdeG[ChangeG[int]](ChangeGJSONSerdeG[int]{})
+
+func (s ChangeGJSONSerdeG[V]) String() string {
+	return fmt.Sprintf("ChangeGJSONSerdeG{val: %s}", s.ValJSONSerde.String())
+}
 
 func (s ChangeGJSONSerdeG[V]) Encode(value ChangeG[V]) ([]byte, *[]byte, error) {
 	c, newBuf, oldBuf, err := changeGToChangeSer(value, s.ValJSONSerde)
@@ -119,7 +124,11 @@ type ChangeGMsgpSerdeG[V any] struct {
 	ValMsgpSerde SerdeG[V]
 }
 
-var _ = SerdeG[ChangeG[int]](&ChangeGMsgpSerdeG[int]{})
+var _ = SerdeG[ChangeG[int]](ChangeGMsgpSerdeG[int]{})
+
+func (s ChangeGMsgpSerdeG[V]) String() string {
+	return fmt.Sprintf("ChangeGMsgpSerdeG{val: %s}", s.ValMsgpSerde.String())
+}
 
 func (s ChangeGMsgpSerdeG[V]) Encode(value ChangeG[V]) ([]byte, *[]byte, error) {
 	c, newBuf, oldBuf, err := changeGToChangeSer(value, s.ValMsgpSerde)

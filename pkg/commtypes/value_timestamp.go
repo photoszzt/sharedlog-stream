@@ -140,6 +140,10 @@ type ValueTimestampJSONSerde struct {
 
 var _ = Serde(ValueTimestampJSONSerde{})
 
+func (s ValueTimestampJSONSerde) String() string {
+	return fmt.Sprintf("ValueTimestampJSONSerde{val: %s}", s.ValJSONSerde.String())
+}
+
 func (s ValueTimestampJSONSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	vs, vbuf, err := convertToValueTsSer(value, s.ValJSONSerde)
 	defer func() {
@@ -172,6 +176,10 @@ func (s ValueTimestampJSONSerde) Decode(value []byte) (interface{}, error) {
 type ValueTimestampMsgpSerde struct {
 	DefaultMsgpSerde
 	ValMsgpSerde Serde
+}
+
+func (s ValueTimestampMsgpSerde) String() string {
+	return fmt.Sprintf("ValueTimestampMsgpSerde{val: %s}", s.ValMsgpSerde.String())
 }
 
 func (s ValueTimestampMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {

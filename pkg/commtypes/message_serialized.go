@@ -98,6 +98,10 @@ type MessageMsgpSerde struct {
 
 var _ MessageSerde = MessageMsgpSerde{}
 
+func (s MessageMsgpSerde) String() string {
+	return fmt.Sprintf("MessageMsgpSerde{key: %s, val: %s}", s.keySerde.String(), s.valSerde.String())
+}
+
 func (s MessageMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	msgSer, kbuf, vbuf, err := convertToMsgSer(value, s.keySerde, s.valSerde)
 	defer func() {
@@ -187,6 +191,10 @@ type MessageJSONSerde struct {
 }
 
 var _ MessageSerde = MessageJSONSerde{}
+
+func (s MessageJSONSerde) String() string {
+	return fmt.Sprintf("MessageJSONSerde{key: %s, val: %s}", s.KeySerde.String(), s.ValSerde.String())
+}
 
 func (s MessageJSONSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	msgSer, kbuf, vbuf, err := convertToMsgSer(value, s.KeySerde, s.ValSerde)

@@ -49,6 +49,10 @@ type KeyValuePairJSONSerdeG[K, V any] struct {
 	DefaultMsgpSerde
 }
 
+func (s KeyValuePairJSONSerdeG[K, V]) String() string {
+	return fmt.Sprintf("KeyValuePairJSONSerdeG{key: %s, val: %s}", s.keySerde.String(), s.valSerde.String())
+}
+
 func (s KeyValuePairJSONSerdeG[K, V]) Encode(v *KeyValuePair[K, V]) ([]byte, *[]byte, error) {
 	kvser, kbuf, vbuf, err := KVPairToKVPairSer(v, s.keySerde, s.valSerde)
 	defer func() {
@@ -81,6 +85,10 @@ type KeyValuePairMsgpSerdeG[K, V any] struct {
 	DefaultMsgpSerde
 	keySerde SerdeG[K]
 	valSerde SerdeG[V]
+}
+
+func (s KeyValuePairMsgpSerdeG[K, V]) String() string {
+	return fmt.Sprintf("KeyValuePairMsgpSerdeG{key: %s, val: %s}", s.keySerde.String(), s.valSerde.String())
 }
 
 func (s KeyValuePairMsgpSerdeG[K, V]) Encode(v *KeyValuePair[K, V]) ([]byte, *[]byte, error) {
@@ -130,6 +138,10 @@ type KeyValuePairsJSONSerdeG[K, V any] struct {
 	s          KeyValuePairJSONSerdeG[K, V]
 }
 
+func (s KeyValuePairsJSONSerdeG[K, V]) String() string {
+	return fmt.Sprintf("KeyValuePairsJSONSerdeG{%s, %s}", s.payloadEnc.String(), s.s.String())
+}
+
 func (s KeyValuePairsJSONSerdeG[K, V]) Encode(v KeyValuePairs[K, V]) ([]byte, *[]byte, error) {
 	payloadArr := PayloadArr{
 		Payloads: make([][]byte, 0, len(v)),
@@ -173,6 +185,10 @@ type KeyValuePairsMsgpSerdeG[K, V any] struct {
 	DefaultMsgpSerde
 	payloadEnc PayloadArrMsgpSerdeG
 	s          KeyValuePairMsgpSerdeG[K, V]
+}
+
+func (s KeyValuePairsMsgpSerdeG[K, V]) String() string {
+	return fmt.Sprintf("KeyValuePairsMsgpSerdeG{%s, %s}", s.payloadEnc.String(), s.s.String())
 }
 
 func EncodeKVPairs[K, V any](kvs KeyValuePairs[K, V], payloadSerde SerdeG[PayloadArr],

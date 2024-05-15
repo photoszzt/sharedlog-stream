@@ -2,6 +2,7 @@ package commtypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/utils"
 )
@@ -26,7 +27,11 @@ type ChangeJSONSerdeG struct {
 	ValJSONSerde Serde
 }
 
-var _ = SerdeG[Change](&ChangeJSONSerdeG{})
+var _ = SerdeG[Change](ChangeJSONSerdeG{})
+
+func (s ChangeJSONSerdeG) String() string {
+	return fmt.Sprintf("ChangeJSONSerdeG{val: %s}", s.ValJSONSerde.String())
+}
 
 func (s ChangeJSONSerdeG) Encode(value Change) ([]byte, *[]byte, error) {
 	c, newBuf, oldBuf, err := changeToChangeSer(value, s.ValJSONSerde)
@@ -63,6 +68,10 @@ type ChangeMsgpSerdeG struct {
 }
 
 var _ = SerdeG[Change](ChangeMsgpSerdeG{})
+
+func (s ChangeMsgpSerdeG) String() string {
+	return fmt.Sprintf("ChangeMsgpSerdeG{val: %s}", s.ValMsgpSerde.String())
+}
 
 func (s ChangeMsgpSerdeG) Encode(value Change) ([]byte, *[]byte, error) {
 	c, newBuf, oldBuf, err := changeToChangeSer(value, s.ValMsgpSerde)

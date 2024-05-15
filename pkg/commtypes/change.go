@@ -113,6 +113,10 @@ type ChangeJSONSerde struct {
 
 var _ = Serde(ChangeJSONSerde{})
 
+func (s ChangeJSONSerde) String() string {
+	return fmt.Sprintf("ChangeJSONSerde{val: %s}", s.ValJSONSerde.String())
+}
+
 func (s ChangeJSONSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	c, newBuf, oldBuf, err := convertToChangeSer(value, s.ValJSONSerde)
 	defer func() {
@@ -148,6 +152,10 @@ type ChangeMsgpSerde struct {
 }
 
 var _ = Serde(ChangeMsgpSerde{})
+
+func (s ChangeMsgpSerde) String() string {
+	return fmt.Sprintf("ChangeMsgpSerde{val: %s}", s.ValMsgpSerde.String())
+}
 
 func (s ChangeMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	c, newBuf, oldBuf, err := convertToChangeSer(value, s.ValMsgpSerde)

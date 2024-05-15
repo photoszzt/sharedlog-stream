@@ -2,6 +2,7 @@ package commtypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 )
 
@@ -9,7 +10,25 @@ type OffsetMarkerJSONSerdeG struct {
 	DefaultJSONSerde
 }
 
+func (s OffsetMarkerJSONSerdeG) String() string {
+	return "OffsetMarkerJSONSerdeG"
+}
+
+var _ = fmt.Stringer(OffsetMarkerJSONSerdeG{})
+
 var _ = SerdeG[OffsetMarker](OffsetMarkerJSONSerdeG{})
+
+type OffsetMarkerMsgpSerdeG struct {
+	DefaultMsgpSerde
+}
+
+func (s OffsetMarkerMsgpSerdeG) String() string {
+	return "OffsetMarkerMsgpSerdeG"
+}
+
+var _ = fmt.Stringer(OffsetMarkerMsgpSerdeG{})
+
+var _ = SerdeG[OffsetMarker](OffsetMarkerMsgpSerdeG{})
 
 func (s OffsetMarkerJSONSerdeG) Encode(value OffsetMarker) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
@@ -23,12 +42,6 @@ func (s OffsetMarkerJSONSerdeG) Decode(value []byte) (OffsetMarker, error) {
 	}
 	return v, nil
 }
-
-type OffsetMarkerMsgpSerdeG struct {
-	DefaultMsgpSerde
-}
-
-var _ = SerdeG[OffsetMarker](OffsetMarkerMsgpSerdeG{})
 
 func (s OffsetMarkerMsgpSerdeG) Encode(value OffsetMarker) ([]byte, *[]byte, error) {
 	b := PopBuffer(value.Msgsize())

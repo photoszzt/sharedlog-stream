@@ -30,6 +30,10 @@ func (kwTs KeyAndWindowStartTsG[K]) String() string {
 
 var _ SerdeG[KeyAndWindowStartTsG[int]] = KeyAndWindowStartTsJSONSerdeG[int]{}
 
+func (s KeyAndWindowStartTsJSONSerdeG[K]) String() string {
+	return fmt.Sprintf("KeyAndWindowStartTsJSONSerdeG{key: %s}", s.KeyJSONSerde.String())
+}
+
 func kwsToKwsSer[K any](value KeyAndWindowStartTsG[K], keySerde SerdeG[K]) (*KeyAndWindowStartTsSerialized, *[]byte, error) {
 	kenc, buf, err := keySerde.Encode(value.Key)
 	if err != nil {
@@ -89,6 +93,10 @@ type KeyAndWindowStartTsMsgpSerdeG[K any] struct {
 }
 
 var _ = SerdeG[KeyAndWindowStartTsG[int]](KeyAndWindowStartTsMsgpSerdeG[int]{})
+
+func (s KeyAndWindowStartTsMsgpSerdeG[K]) String() string {
+	return fmt.Sprintf("KeyAndWindowStartTsMsgpSerdeG{key: %s}", s.KeyMsgpSerde.String())
+}
 
 func (s KeyAndWindowStartTsMsgpSerdeG[K]) Encode(value KeyAndWindowStartTsG[K]) ([]byte, *[]byte, error) {
 	kw, kbuf, err := kwsToKwsSer(value, s.KeyMsgpSerde)
