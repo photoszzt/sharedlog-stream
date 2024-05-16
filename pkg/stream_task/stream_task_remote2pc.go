@@ -96,19 +96,19 @@ func SetupManagerForRemote2pc(ctx context.Context, t *StreamTask, args *StreamTa
 	client := transaction.NewRemoteTxnMngrClientGrpc(conn, args.transactionalId)
 	// node := getNodeConstraint(args.ectx.SubstreamNum())
 	// client := transaction.NewRemoteTxnMngrClientBoki(args.faas_gateway, node, args.serdeFormat, args.transactionalId)
-	debug.Fprintf(os.Stderr, "[%d] remote txn manager client setup done\n",
-		args.ectx.SubstreamNum())
+	// debug.Fprintf(os.Stderr, "[%d] remote txn manager client setup done\n",
+	// 	args.ectx.SubstreamNum())
 
 	arg := prepareInit(client, args)
-	debug.Fprintf(os.Stderr, "[%d] done prepare init\n", args.ectx.SubstreamNum())
+	// debug.Fprintf(os.Stderr, "[%d] done prepare init\n", args.ectx.SubstreamNum())
 	initReply, err := client.Init(ctx, arg)
 	if err != nil {
 		return nil, nil, err
 	}
 	client.UpdateProducerId(initReply.ProdId)
-	prodId := client.GetProducerId()
-	debug.Fprintf(os.Stderr, "[%d] done init transaction manager, got task id: %#x, task epoch: %#x\n",
-		args.ectx.SubstreamNum(), prodId.TaskId, prodId.TaskEpoch)
+	// prodId := client.GetProducerId()
+	// debug.Fprintf(os.Stderr, "[%d] done init transaction manager, got task id: %#x, task epoch: %#x\n",
+	// 	args.ectx.SubstreamNum(), prodId.TaskId, prodId.TaskEpoch)
 	if len(initReply.OffsetPairs) != 0 {
 		restoreBeg := time.Now()
 		// if env_config.CREATE_SNAPSHOT {
@@ -148,6 +148,7 @@ func SetupManagerForRemote2pc(ctx context.Context, t *StreamTask, args *StreamTa
 		return nil, nil, err
 	}
 	trackParFunc := func(topicName string, substreamId uint8) {
+		debug.Fprintf(os.Stderr, "track tp %s substreamid %d\n", topicName, substreamId)
 		client.AddTopicSubstream(topicName, substreamId)
 	}
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
@@ -320,6 +321,7 @@ func commitTxnRemote(ctx context.Context,
 			return common.GenErrFnOutput(fmt.Errorf("commitAsyncComplete failed: %v", err))
 		}
 	} else {
+		fmt.Fprintf(os.Stderr, "[%d] final commit\n", meta.args.ectx.SubstreamNum())
 		logOff, err = meta.rtm_client.CommitTransaction(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("commit failed")
