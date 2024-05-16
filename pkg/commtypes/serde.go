@@ -1,4 +1,4 @@
-//go:generate stringer -type=SerdeFormat,Float64SerdeG
+//go:generate stringer -type=SerdeFormat
 package commtypes
 
 import (
