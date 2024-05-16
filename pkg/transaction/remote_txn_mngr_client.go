@@ -102,7 +102,8 @@ func (tc *RemoteTxnManagerClient) prepareAppendConsumedSeqNum(consumers []*produ
 			TaskEpoch: tc.prodId.TaskEpoch,
 			TaskId:    tc.prodId.TaskId,
 		},
-		ParNum: uint32(parNum),
+		ParNum:      uint32(parNum),
+		OffsetPairs: make([]*remote_txn_rpc.OffsetPair, 0, len(consumers)),
 	}
 	for _, consumer := range consumers {
 		topic := consumer.TopicName()
