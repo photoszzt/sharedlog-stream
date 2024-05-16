@@ -28,6 +28,7 @@ type RemoteTxnMngrClient interface {
 	AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	CommitTxnAsyncComplete(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*CommitReply, error)
+	CommitTxn(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*CommitReply, error)
 	AppendConsumedOffset(ctx context.Context, in *ConsumedOffsets, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
@@ -75,6 +76,15 @@ func (c *remoteTxnMngrClient) CommitTxnAsyncComplete(ctx context.Context, in *tx
 	return out, nil
 }
 
+func (c *remoteTxnMngrClient) CommitTxn(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*CommitReply, error) {
+	out := new(CommitReply)
+	err := c.cc.Invoke(ctx, "/remote_txn_rpc.RemoteTxnMngr/CommitTxn", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *remoteTxnMngrClient) AppendConsumedOffset(ctx context.Context, in *ConsumedOffsets, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, "/remote_txn_rpc.RemoteTxnMngr/AppendConsumedOffset", in, out, opts...)
@@ -92,6 +102,7 @@ type RemoteTxnMngrServer interface {
 	AppendTpPar(context.Context, *txn_data.TxnMetaMsg) (*emptypb.Empty, error)
 	AbortTxn(context.Context, *txn_data.TxnMetaMsg) (*emptypb.Empty, error)
 	CommitTxnAsyncComplete(context.Context, *txn_data.TxnMetaMsg) (*CommitReply, error)
+	CommitTxn(context.Context, *txn_data.TxnMetaMsg) (*CommitReply, error)
 	AppendConsumedOffset(context.Context, *ConsumedOffsets) (*emptypb.Empty, error)
 	mustEmbedUnimplementedRemoteTxnMngrServer()
 }
@@ -111,6 +122,9 @@ func (UnimplementedRemoteTxnMngrServer) AbortTxn(context.Context, *txn_data.TxnM
 }
 func (UnimplementedRemoteTxnMngrServer) CommitTxnAsyncComplete(context.Context, *txn_data.TxnMetaMsg) (*CommitReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CommitTxnAsyncComplete not implemented")
+}
+func (UnimplementedRemoteTxnMngrServer) CommitTxn(context.Context, *txn_data.TxnMetaMsg) (*CommitReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CommitTxn not implemented")
 }
 func (UnimplementedRemoteTxnMngrServer) AppendConsumedOffset(context.Context, *ConsumedOffsets) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AppendConsumedOffset not implemented")
@@ -200,6 +214,24 @@ func _RemoteTxnMngr_CommitTxnAsyncComplete_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RemoteTxnMngr_CommitTxn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(txn_data.TxnMetaMsg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RemoteTxnMngrServer).CommitTxn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/remote_txn_rpc.RemoteTxnMngr/CommitTxn",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RemoteTxnMngrServer).CommitTxn(ctx, req.(*txn_data.TxnMetaMsg))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _RemoteTxnMngr_AppendConsumedOffset_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ConsumedOffsets)
 	if err := dec(in); err != nil {
@@ -240,6 +272,10 @@ var RemoteTxnMngr_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CommitTxnAsyncComplete",
 			Handler:    _RemoteTxnMngr_CommitTxnAsyncComplete_Handler,
+		},
+		{
+			MethodName: "CommitTxn",
+			Handler:    _RemoteTxnMngr_CommitTxn_Handler,
 		},
 		{
 			MethodName: "AppendConsumedOffset",

@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -312,9 +313,18 @@ func commitTxnRemote(ctx context.Context,
 
 	var logOff uint64
 	cBeg := stats.TimerBegin()
-	logOff, err = meta.rtm_client.CommitTransactionAsyncComplete(ctx)
-	if err != nil {
-		return common.GenErrFnOutput(err)
+	if env_config.ASYNC_SECOND_PHASE && !finalCommit {
+		logOff, err = meta.rtm_client.CommitTransactionAsyncComplete(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("commitAsyncComplete failed")
+			return common.GenErrFnOutput(fmt.Errorf("commitAsyncComplete failed: %v", err))
+		}
+	} else {
+		logOff, err = meta.rtm_client.CommitTransaction(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("commit failed")
+			return common.GenErrFnOutput(fmt.Errorf("commit failed: %v\n", err))
+		}
 	}
 	if env_config.CREATE_SNAPSHOT && meta.args.snapshotEvery != 0 && time.Since(*snapshotTimer) > meta.args.snapshotEvery {
 		// auxdata is set to precommit
@@ -325,6 +335,7 @@ func commitTxnRemote(ctx context.Context,
 	commitTxnElapsed := stats.Elapsed(commitTxnBeg).Microseconds()
 	meta.t.waitPrevTxnInCmt.AddSample(waitAndStart)
 	meta.t.txnCounter.Tick(1)
+
 	meta.t.txnCommitTime.AddSample(commitTxnElapsed)
 	meta.t.commitTxnAPITime.AddSample(cElapsed)
 	meta.t.flushStageTime.AddSample(flushTime)

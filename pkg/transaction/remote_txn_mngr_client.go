@@ -204,3 +204,12 @@ func (tc *RemoteTxnMngrClientGrpc) CommitTransactionAsyncComplete(ctx context.Co
 	}
 	return ret.LogOffset, err
 }
+
+func (tc *RemoteTxnMngrClientGrpc) CommitTransaction(ctx context.Context) (uint64, error) {
+	txnMeta := tc.prepareAbortOrCommit()
+	ret, err := tc.CommitTxn(ctx, txnMeta)
+	if err != nil {
+		return 0, err
+	}
+	return ret.LogOffset, err
+}

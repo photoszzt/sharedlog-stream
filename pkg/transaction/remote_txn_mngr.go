@@ -2,8 +2,6 @@ package transaction
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/env_config"
@@ -55,6 +53,11 @@ func (s *RemoteTxnManagerServer) AppendConsumedOffset(ctx context.Context, in *r
 func (s *RemoteTxnManagerServer) CommitTxnAsyncComplete(ctx context.Context, in *txn_data.TxnMetaMsg) (*remote_txn_rpc.CommitReply, error) {
 	ctx = context.WithValue(ctx, commtypes.ENVID{}, s.env)
 	return s.RemoteTxnManager.CommitTxnAsyncComplete(ctx, in)
+}
+
+func (s *RemoteTxnManagerServer) CommitTxn(ctx context.Context, in *txn_data.TxnMetaMsg) (*remote_txn_rpc.CommitReply, error) {
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, s.env)
+	return s.RemoteTxnManager.CommitTxn(ctx, in)
 }
 
 func (s *RemoteTxnManagerServer) Init(ctx context.Context, in *remote_txn_rpc.InitArg) (*remote_txn_rpc.InitReply, error) {
@@ -176,9 +179,11 @@ func (s *RemoteTxnManager) AppendTpPar(ctx context.Context, in *txn_data.TxnMeta
 	prodId := s.prod_id_map[in.TransactionalId]
 	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
 		s.mu.Unlock()
-		log.Error().Uint64("recorded task id", prodId.TaskId).Uint32("recorded task epoch", prodId.TaskEpoch).Msg("stale producer")
-		fmt.Fprintf(os.Stderr, "stale producer recorded task id %#x, task epoch: %#x, got task id %#x, task epoch %#x\n",
-			prodId.TaskId, prodId.TaskEpoch, in.ProdId.GetTaskId(), in.ProdId.GetTaskEpoch())
+		log.Error().Uint64("recorded task id", prodId.TaskId).
+			Uint32("recorded task epoch", prodId.TaskEpoch).
+			Uint64("got task id", in.ProdId.TaskId).
+			Uint32("got task epoch", in.ProdId.TaskEpoch).
+			Msg("producer id mismatch")
 		return common_errors.ErrStaleProducer
 	}
 	tm := s.tm_map[in.TransactionalId]
@@ -211,7 +216,11 @@ func (s *RemoteTxnManager) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg
 	prodId := s.prod_id_map[in.TransactionalId]
 	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
 		s.mu.Unlock()
-		log.Error().Msgf("recorded producer task id: %#x, task epoch: %#x", prodId.TaskId, prodId.TaskEpoch)
+		log.Error().Uint64("recorded task id", prodId.TaskId).
+			Uint32("recorded task epoch", prodId.TaskEpoch).
+			Uint64("got task id", in.ProdId.TaskId).
+			Uint32("got task epoch", in.ProdId.TaskEpoch).
+			Msg("producer id mismatch")
 		return common_errors.ErrStaleProducer
 	}
 	tm := s.tm_map[in.TransactionalId]
@@ -238,7 +247,11 @@ func (s *RemoteTxnManager) AppendConsumedOffset(ctx context.Context, in *remote_
 	prodId := s.prod_id_map[in.TransactionalId]
 	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
 		s.mu.Unlock()
-		log.Error().Msgf("recorded producer task id: %#x, task epoch: %#x", prodId.TaskId, prodId.TaskEpoch)
+		log.Error().Uint64("recorded task id", prodId.TaskId).
+			Uint32("recorded task epoch", prodId.TaskEpoch).
+			Uint64("got task id", in.ProdId.TaskId).
+			Uint32("got task epoch", in.ProdId.TaskEpoch).
+			Msg("producer id mismatch")
 		return common_errors.ErrStaleProducer
 	}
 	tm := s.tm_map[in.TransactionalId]
@@ -297,7 +310,11 @@ func (s *RemoteTxnManager) CommitTxnAsyncComplete(ctx context.Context, in *txn_d
 	prodId := s.prod_id_map[in.TransactionalId]
 	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
 		s.mu.Unlock()
-		log.Error().Msgf("recorded producer task id: %#x, task epoch: %#x", prodId.TaskId, prodId.TaskEpoch)
+		log.Error().Uint64("recorded task id", prodId.TaskId).
+			Uint32("recorded task epoch", prodId.TaskEpoch).
+			Uint64("got task id", in.ProdId.TaskId).
+			Uint32("got task epoch", in.ProdId.TaskEpoch).
+			Msg("producer id mismatch")
 		return nil, common_errors.ErrStaleProducer
 	}
 	tm := s.tm_map[in.TransactionalId]
@@ -319,6 +336,36 @@ func (s *RemoteTxnManager) CommitTxnAsyncComplete(ctx context.Context, in *txn_d
 		return nil
 	})
 	// debug.Fprint(os.Stderr, "done CommitTxnAsyncComplete\n")
+	return &remote_txn_rpc.CommitReply{
+		LogOffset: logOff,
+	}, nil
+}
+
+func (s *RemoteTxnManager) CommitTxn(ctx context.Context, in *txn_data.TxnMetaMsg) (*remote_txn_rpc.CommitReply, error) {
+	s.mu.Lock()
+	prodId := s.prod_id_map[in.TransactionalId]
+	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
+		s.mu.Unlock()
+		log.Error().Uint64("recorded task id", prodId.TaskId).
+			Uint32("recorded task epoch", prodId.TaskEpoch).
+			Uint64("got task id", in.ProdId.TaskId).
+			Uint32("got task epoch", in.ProdId.TaskEpoch).
+			Msg("producer id mismatch")
+		return nil, common_errors.ErrStaleProducer
+	}
+	tm := s.tm_map[in.TransactionalId]
+	s.mu.Unlock()
+	txnMd := txn_data.TxnMetadata{
+		State: txn_data.PREPARE_COMMIT,
+	}
+	logOff, err := tm.appendToTransactionLog(ctx, txnMd, []uint64{tm.txnLogTag})
+	if err != nil {
+		return nil, err
+	}
+	err = tm.completeTransaction(tm.bgCtx, commtypes.EPOCH_END, txn_data.COMPLETE_COMMIT, in.TopicPartitions)
+	if err != nil {
+		return nil, err
+	}
 	return &remote_txn_rpc.CommitReply{
 		LogOffset: logOff,
 	}, nil

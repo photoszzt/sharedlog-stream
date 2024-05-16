@@ -295,9 +295,9 @@ func commitTransaction(ctx context.Context,
 	commitTxnBeg := stats.TimerBegin()
 	// debug.Fprintf(os.Stderr, "paused\n")
 	waitPrev := stats.TimerBegin()
-	for _, src := range meta.args.ectx.Consumers() {
-		meta.tm.AddTopicTrackConsumedSeqs(src.TopicName(), meta.args.ectx.SubstreamNum())
-	}
+	// for _, src := range meta.args.ectx.Consumers() {
+	// 	meta.tm.AddTopicTrackConsumedSeqs(src.TopicName(), meta.args.ectx.SubstreamNum())
+	// }
 
 	waited, err := meta.tm.EnsurePrevTxnFinAndAppendMeta(ctx)
 	if err != nil {

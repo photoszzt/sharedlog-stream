@@ -16,6 +16,7 @@ service RemoteTxnMngr {
   rpc AppendTpPar(txn_data.TxnMetaMsg) returns (google.protobuf.Empty) {}
   rpc AbortTxn(txn_data.TxnMetaMsg) returns (google.protobuf.Empty) {}
   rpc CommitTxnAsyncComplete(txn_data.TxnMetaMsg) returns (CommitReply) {}
+  rpc CommitTxn(txn_data.TxnMetaMsg) returns (CommitReply) {}
   rpc AppendConsumedOffset(ConsumedOffsets) returns (google.protobuf.Empty) {}
 }
 

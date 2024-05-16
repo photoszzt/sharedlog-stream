@@ -436,6 +436,22 @@ func GetOffset(ctx context.Context, tm *TransactionManager,
 // }
 
 func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumers []*producer_consumer.MeteredConsumer, parNum uint8) error {
+	tps := make([]*txn_data.TopicPartition, 0, len(consumers))
+	for _, consumer := range consumers {
+		offsetTopic := con_types.OffsetTopic(consumer.TopicName())
+		tps = append(tps, &txn_data.TopicPartition{
+			Topic:  offsetTopic,
+			ParNum: []byte{parNum},
+		})
+	}
+	txnMeta := txn_data.TxnMetadata{
+		State:           txn_data.BEGIN,
+		TopicPartitions: tps,
+	}
+	_, err := tc.appendToTransactionLog(ctx, txnMeta, []uint64{tc.txnLogTag})
+	if err != nil {
+		return err
+	}
 	for _, consumer := range consumers {
 		topic := consumer.TopicName()
 		offset := consumer.CurrentConsumedSeqNum()
