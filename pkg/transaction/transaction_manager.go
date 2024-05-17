@@ -338,7 +338,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 	for _, tpParNum := range topicSubstreams {
 		stream := tc.topicStreams[tpParNum.Topic]
 		topicNameHash := stream.TopicNameHash()
-		for par := range tpParNum.ParNum {
+		for _, par := range tpParNum.ParNum {
 			parNum := uint8(par)
 			tag := txn_data.MarkerTag(topicNameHash, parNum)
 			tag2 := sharedlog_stream.NameHashWithPartition(topicNameHash, parNum)
