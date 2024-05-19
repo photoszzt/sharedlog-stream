@@ -96,7 +96,7 @@ func (e *StreamLogEntry) BelongsToTopic(topicName string) bool {
 	}
 }
 
-func decodeStreamLogEntry(logEntry *types.LogEntry) *StreamLogEntry {
+func DecodeStreamLogEntry(logEntry *types.LogEntry) *StreamLogEntry {
 	streamLogEntry := StreamLogEntry{}
 	_, err := streamLogEntry.UnmarshalMsg(logEntry.Data)
 	if err != nil {
@@ -239,7 +239,7 @@ func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum ui
 			return nil, common_errors.ErrStreamEmpty
 		}
 		seqNum = logEntry.SeqNum
-		streamLogEntry := decodeStreamLogEntry(logEntry)
+		streamLogEntry := DecodeStreamLogEntry(logEntry)
 		if !streamLogEntry.BelongsToTopic(s.topicName) {
 			continue
 		} else {
@@ -288,7 +288,7 @@ func (s *SharedLogStream) ReadNextWithTagUntil(ctx context.Context, parNum uint8
 		if logEntry == nil {
 			return logEntries, nil
 		}
-		streamLogEntry := decodeStreamLogEntry(logEntry)
+		streamLogEntry := DecodeStreamLogEntry(logEntry)
 		isControl := bits.Has(bits.Bits(streamLogEntry.Meta), Control)
 		if streamLogEntry.BelongsToTopic(s.topicName) || isControl {
 			isPayloadArr := bits.Has(bits.Bits(streamLogEntry.Meta), PayloadArr)
@@ -331,7 +331,7 @@ func (s *SharedLogStream) ReadFromSeqNumWithTag(ctx context.Context, from uint64
 		if logEntry == nil {
 			continue
 		}
-		streamLogEntry := decodeStreamLogEntry(logEntry)
+		streamLogEntry := DecodeStreamLogEntry(logEntry)
 		// fmt.Fprintf(os.Stderr, "logEntry %#x, tp %v, taskId %#x, taskEpoch %#x\n",
 		// 	logEntry.SeqNum, streamLogEntry.TopicName, streamLogEntry.TaskId, streamLogEntry.TaskEpoch)
 		if streamLogEntry.BelongsToTopic(s.topicName) &&
@@ -386,7 +386,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		if logEntry == nil {
 			return nil, common_errors.ErrStreamEmpty
 		}
-		streamLogEntry := decodeStreamLogEntry(logEntry)
+		streamLogEntry := DecodeStreamLogEntry(logEntry)
 		isControl := bits.Has(bits.Bits(streamLogEntry.Meta), Control)
 		if streamLogEntry.BelongsToTopic(s.topicName) || isControl {
 			isPayloadArr := bits.Has(bits.Bits(streamLogEntry.Meta), PayloadArr)
@@ -465,7 +465,7 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 			break
 		}
 		seqNum = logEntry.SeqNum
-		streamLogEntry := decodeStreamLogEntry(logEntry)
+		streamLogEntry := DecodeStreamLogEntry(logEntry)
 		if !streamLogEntry.BelongsToTopic(s.topicName) {
 			seqNum -= 1
 			continue
