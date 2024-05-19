@@ -19,6 +19,7 @@ import (
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/transaction/remote_txn_rpc"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -389,32 +390,11 @@ func pauseTimedFlushStreams(
 	return timedFlushStreams(ctx, t, args)
 }
 
-func flush[V store.StoreWithFlush](ctx context.Context, v []V) (uint32, int64, error) {
+func flushSerial[V store.StoreWithFlush](ctx context.Context, v []V) (uint32, int64, error) {
 	flushed := uint32(0)
 	elapsed := int64(0)
 	if len(v) != 0 {
 		kvcBeg := stats.TimerBegin()
-		// if len(v) > 1 {
-		// 	var atomic_flushed atomic.Uint32
-		// 	bgGrp, bgCtx := errgroup.WithContext(ctx)
-		// 	for _, scl := range v {
-		// 		s := scl
-		// 		bgGrp.Go(func() error {
-		// 			f, err := s.Flush(bgCtx)
-		// 			if err != nil {
-		// 				log.Error().Err(err).Msg("flush store/producer")
-		// 				return fmt.Errorf("flush store/producer: %v", err)
-		// 			}
-		// 			atomic_flushed.Add(f)
-		// 			return nil
-		// 		})
-		// 	}
-		// 	err := bgGrp.Wait()
-		// 	if err != nil {
-		// 		return 0, 0, err
-		// 	}
-		// 	flushed += atomic_flushed.Load()
-		// } else {
 		for _, kvchangelog := range v {
 			f, err := kvchangelog.Flush(ctx)
 			if err != nil {
@@ -423,38 +403,58 @@ func flush[V store.StoreWithFlush](ctx context.Context, v []V) (uint32, int64, e
 			}
 			flushed += f
 		}
-		// }
 		elapsed = stats.Elapsed(kvcBeg).Microseconds()
 	}
 	return flushed, elapsed, nil
 
 }
 
-func flushStoreWithCl[V store.StoreBackedByChangelog](ctx context.Context, v map[string]V) (uint32, int64, error) {
+func flushParallel[V store.StoreWithFlush](ctx context.Context, v []V) (uint32, int64, error) {
 	flushed := uint32(0)
 	elapsed := int64(0)
 	if len(v) != 0 {
 		kvcBeg := stats.TimerBegin()
-		// if len(v) > 1 {
-		// 	var atomic_flushed atomic.Uint32
-		// 	bgGrp, bgCtx := errgroup.WithContext(ctx)
-		// 	for _, scl := range v {
-		// 		s := scl
-		// 		bgGrp.Go(func() error {
-		// 			f, err := s.Flush(bgCtx)
-		// 			if err != nil {
-		// 				return fmt.Errorf("store with cl flush: %v", err)
-		// 			}
-		// 			atomic_flushed.Add(f)
-		// 			return nil
-		// 		})
-		// 	}
-		// 	err := bgGrp.Wait()
-		// 	if err != nil {
-		// 		return 0, 0, err
-		// 	}
-		// 	flushed += atomic_flushed.Load()
-		// } else {
+		if len(v) > 1 {
+			var atomic_flushed atomic.Uint32
+			bgGrp, bgCtx := errgroup.WithContext(ctx)
+			for _, scl := range v {
+				s := scl
+				bgGrp.Go(func() error {
+					f, err := s.Flush(bgCtx)
+					if err != nil {
+						log.Error().Err(err).Msg("flush store/producer")
+						return fmt.Errorf("flush store/producer: %v", err)
+					}
+					atomic_flushed.Add(f)
+					return nil
+				})
+			}
+			err := bgGrp.Wait()
+			if err != nil {
+				return 0, 0, err
+			}
+			flushed += atomic_flushed.Load()
+		} else {
+			for _, kvchangelog := range v {
+				f, err := kvchangelog.Flush(ctx)
+				if err != nil {
+					log.Error().Err(err).Msg("flush store/producer")
+					return 0, 0, fmt.Errorf("flush store/producer: %v", err)
+				}
+				flushed += f
+			}
+		}
+		elapsed = stats.Elapsed(kvcBeg).Microseconds()
+	}
+	return flushed, elapsed, nil
+
+}
+
+func flushStoreWithClSerial[V store.StoreBackedByChangelog](ctx context.Context, v map[string]V) (uint32, int64, error) {
+	flushed := uint32(0)
+	elapsed := int64(0)
+	if len(v) != 0 {
+		kvcBeg := stats.TimerBegin()
 		for _, kvchangelog := range v {
 			f, err := kvchangelog.Flush(ctx)
 			if err != nil {
@@ -462,7 +462,44 @@ func flushStoreWithCl[V store.StoreBackedByChangelog](ctx context.Context, v map
 			}
 			flushed += f
 		}
-		// }
+		elapsed = stats.Elapsed(kvcBeg).Microseconds()
+	}
+	return flushed, elapsed, nil
+}
+
+func flushStoreWithCl[V store.StoreBackedByChangelog](ctx context.Context, v map[string]V) (uint32, int64, error) {
+	flushed := uint32(0)
+	elapsed := int64(0)
+	if len(v) != 0 {
+		kvcBeg := stats.TimerBegin()
+		if len(v) > 1 {
+			var atomic_flushed atomic.Uint32
+			bgGrp, bgCtx := errgroup.WithContext(ctx)
+			for _, scl := range v {
+				s := scl
+				bgGrp.Go(func() error {
+					f, err := s.Flush(bgCtx)
+					if err != nil {
+						return fmt.Errorf("store with cl flush: %v", err)
+					}
+					atomic_flushed.Add(f)
+					return nil
+				})
+			}
+			err := bgGrp.Wait()
+			if err != nil {
+				return 0, 0, err
+			}
+			flushed += atomic_flushed.Load()
+		} else {
+			for _, kvchangelog := range v {
+				f, err := kvchangelog.Flush(ctx)
+				if err != nil {
+					return 0, 0, fmt.Errorf("store with cl flush: %v", err)
+				}
+				flushed += f
+			}
+		}
 		elapsed = stats.Elapsed(kvcBeg).Microseconds()
 	}
 	return flushed, elapsed, nil
@@ -473,7 +510,7 @@ func flushStreams(ctx context.Context,
 	args *StreamTaskArgs,
 ) (uint32, error) {
 	ser_flushed := uint32(0)
-	flushed, elapsed, err := flushStoreWithCl(ctx, args.kvChangelogs)
+	flushed, elapsed, err := flushStoreWithClSerial(ctx, args.kvChangelogs)
 	if err != nil {
 		return 0, fmt.Errorf("kvc flush: %v", err)
 	}
@@ -481,7 +518,7 @@ func flushStreams(ctx context.Context,
 	if len(args.kvChangelogs) != 0 {
 		t.kvcFlush.AddSample(elapsed)
 	}
-	flushed, elapsed, err = flushStoreWithCl(ctx, args.windowStoreChangelogs)
+	flushed, elapsed, err = flushStoreWithClSerial(ctx, args.windowStoreChangelogs)
 	if err != nil {
 		return 0, fmt.Errorf("wsc flush: %v", err)
 	}
@@ -489,59 +526,20 @@ func flushStreams(ctx context.Context,
 	if len(args.windowStoreChangelogs) != 0 {
 		t.wscFlush.AddSample(elapsed)
 	}
-	_, _, err = flush(ctx, args.kvs)
+	_, _, err = flushSerial(ctx, args.kvs)
 	if err != nil {
 		return 0, fmt.Errorf("kv flush: %v", err)
 	}
-	_, _, err = flush(ctx, args.wscs)
+	_, _, err = flushSerial(ctx, args.wscs)
 	if err != nil {
 		return 0, fmt.Errorf("ws flush: %v", err)
 	}
-	flushed, elapsed, err = flush(ctx, args.ectx.Producers())
+	flushed, elapsed, err = flushSerial(ctx, args.ectx.Producers())
 	if err != nil {
 		return 0, fmt.Errorf("sink flush: %v", err)
 	}
 	ser_flushed += flushed
 	t.producerFlush.AddSample(elapsed)
-	// pBeg := time.Now()
-	// for _, p := range args.ectx.Producers() {
-	// 	f, err := p.Flush(ctx)
-	// 	if err != nil {
-	// 		return 0, fmt.Errorf("sink flush: %v", err)
-	// 	}
-	// 	ser_flushed += f
-	// }
-	// pElapsed := time.Since(pBeg).Microseconds()
-	// t.producerFlush.AddSample(pElapsed)
-	// procs := args.ectx.Producers()
-	// procs_len := len(procs)
-	// if procs_len > 1 {
-	// 	var flushed atomic.Uint32
-	// 	flushed.Store(0)
-	// 	bgGrp, bgCtx := errgroup.WithContext(ctx)
-	// 	for _, sink := range procs {
-	// 		s := sink
-	// 		bgGrp.Go(func() error {
-	// 			f, err := s.Flush(bgCtx)
-	// 			if err != nil {
-	// 				return fmt.Errorf("sink flush: %v", err)
-	// 			}
-	// 			flushed.Add(f)
-	// 			return nil
-	// 		})
-	// 	}
-	// 	err := bgGrp.Wait()
-	// 	if err != nil {
-	// 		return 0, err
-	// 	}
-	// 	ser_flushed += flushed.Load()
-	// } else if procs_len == 1 {
-	// 	f, err := procs[0].Flush(ctx)
-	// 	if err != nil {
-	// 		return 0, fmt.Errorf("sink flush: %v", err)
-	// 	}
-	// 	ser_flushed += f
-	// }
 	return ser_flushed, nil
 }
 
