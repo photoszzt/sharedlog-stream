@@ -105,6 +105,9 @@ func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8)
 			// debug.Fprintf(os.Stderr, "[ERROR] return err: %v\n", err)
 			return nil, err
 		}
+		if rawMsg.IsSyncToRecent {
+			continue
+		}
 		// debug.Fprintf(os.Stderr, "RawMsg\n")
 		// debug.Fprintf(os.Stderr, "\tPayload %v\n", string(rawMsg.Payload))
 		// debug.Fprintf(os.Stderr, "\tLogSeq 0x%x\n", rawMsg.LogSeqNum)

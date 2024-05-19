@@ -70,6 +70,9 @@ func (ndc *AlignChkptConsumer) ReadNext(ctx context.Context, parNum uint8) (*com
 		if err != nil {
 			return nil, err
 		}
+		if rawMsg.IsSyncToRecent {
+			continue
+		}
 		if rawMsg.IsControl {
 			epochMark, err := ndc.epochMarkerSerde.Decode(rawMsg.Payload)
 			if err != nil {

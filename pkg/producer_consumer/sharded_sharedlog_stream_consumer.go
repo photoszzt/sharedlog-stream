@@ -229,7 +229,7 @@ L:
 				return nil, err
 			}
 		}
-		if len(rawMsg.Payload) == 0 {
+		if len(rawMsg.Payload) == 0 || rawMsg.IsSyncToRecent {
 			continue
 		}
 		if rawMsg.IsControl {

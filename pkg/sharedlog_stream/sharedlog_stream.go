@@ -136,6 +136,10 @@ func (s *SharedLogStream) SetCursor(cursor uint64, parNum uint8) {
 	s.cursor = cursor
 }
 
+func (s *SharedLogStream) GetCursor() uint64 {
+	return s.cursor
+}
+
 // multiple thread could push to the same stream but only one reader
 func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	payload []byte, parNum uint8, tags []uint64, additionalTopicNames []string,
@@ -245,13 +249,15 @@ func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum ui
 		} else {
 			isControl := bits.Has(bits.Bits(streamLogEntry.Meta), Control)
 			isPayloadArr := bits.Has(bits.Bits(streamLogEntry.Meta), PayloadArr)
+			isSyncToRecent := bits.Has(bits.Bits(streamLogEntry.Meta), SyncToRecent)
 			return &commtypes.RawMsg{
-				Payload:      streamLogEntry.Payload,
-				AuxData:      logEntry.AuxData,
-				MsgSeqNum:    streamLogEntry.MsgSeqNum,
-				LogSeqNum:    logEntry.SeqNum,
-				IsControl:    isControl,
-				IsPayloadArr: isPayloadArr,
+				Payload:        streamLogEntry.Payload,
+				AuxData:        logEntry.AuxData,
+				MsgSeqNum:      streamLogEntry.MsgSeqNum,
+				LogSeqNum:      logEntry.SeqNum,
+				IsControl:      isControl,
+				IsPayloadArr:   isPayloadArr,
+				IsSyncToRecent: isSyncToRecent,
 				ProdId: commtypes.ProducerId{
 					TaskId:    streamLogEntry.TaskId,
 					TaskEpoch: streamLogEntry.TaskEpoch,
@@ -290,16 +296,18 @@ func (s *SharedLogStream) ReadNextWithTagUntil(ctx context.Context, parNum uint8
 		}
 		streamLogEntry := DecodeStreamLogEntry(logEntry)
 		isControl := bits.Has(bits.Bits(streamLogEntry.Meta), Control)
+		isSyncToRecent := bits.Has(bits.Bits(streamLogEntry.Meta), SyncToRecent)
 		if streamLogEntry.BelongsToTopic(s.topicName) || isControl {
 			isPayloadArr := bits.Has(bits.Bits(streamLogEntry.Meta), PayloadArr)
 			s.cursor = logEntry.SeqNum + 1
 			logEntries = append(logEntries, commtypes.RawMsg{
-				Payload:      streamLogEntry.Payload,
-				AuxData:      logEntry.AuxData,
-				MsgSeqNum:    streamLogEntry.MsgSeqNum,
-				LogSeqNum:    logEntry.SeqNum,
-				IsControl:    isControl,
-				IsPayloadArr: isPayloadArr,
+				Payload:        streamLogEntry.Payload,
+				AuxData:        logEntry.AuxData,
+				MsgSeqNum:      streamLogEntry.MsgSeqNum,
+				LogSeqNum:      logEntry.SeqNum,
+				IsControl:      isControl,
+				IsPayloadArr:   isPayloadArr,
+				IsSyncToRecent: isSyncToRecent,
 				ProdId: commtypes.ProducerId{
 					TaskId:    streamLogEntry.TaskId,
 					TaskEpoch: streamLogEntry.TaskEpoch,
@@ -340,13 +348,15 @@ func (s *SharedLogStream) ReadFromSeqNumWithTag(ctx context.Context, from uint64
 
 			isPayloadArr := bits.Has(bits.Bits(streamLogEntry.Meta), PayloadArr)
 			isControl := bits.Has(bits.Bits(streamLogEntry.Meta), Control)
+			isSyncToRecent := bits.Has(bits.Bits(streamLogEntry.Meta), SyncToRecent)
 			return &commtypes.RawMsg{
-				Payload:      streamLogEntry.Payload,
-				AuxData:      logEntry.AuxData,
-				MsgSeqNum:    streamLogEntry.MsgSeqNum,
-				LogSeqNum:    logEntry.SeqNum,
-				IsControl:    isControl,
-				IsPayloadArr: isPayloadArr,
+				Payload:        streamLogEntry.Payload,
+				AuxData:        logEntry.AuxData,
+				MsgSeqNum:      streamLogEntry.MsgSeqNum,
+				LogSeqNum:      logEntry.SeqNum,
+				IsControl:      isControl,
+				IsPayloadArr:   isPayloadArr,
+				IsSyncToRecent: isSyncToRecent,
 				ProdId: commtypes.ProducerId{
 					TaskId:    streamLogEntry.TaskId,
 					TaskEpoch: streamLogEntry.TaskEpoch,
@@ -388,16 +398,18 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		}
 		streamLogEntry := DecodeStreamLogEntry(logEntry)
 		isControl := bits.Has(bits.Bits(streamLogEntry.Meta), Control)
+		isSyncToRecent := bits.Has(bits.Bits(streamLogEntry.Meta), SyncToRecent)
 		if streamLogEntry.BelongsToTopic(s.topicName) || isControl {
 			isPayloadArr := bits.Has(bits.Bits(streamLogEntry.Meta), PayloadArr)
 			s.cursor = logEntry.SeqNum + 1
 			return &commtypes.RawMsg{
-				Payload:      streamLogEntry.Payload,
-				AuxData:      logEntry.AuxData,
-				MsgSeqNum:    streamLogEntry.MsgSeqNum,
-				LogSeqNum:    logEntry.SeqNum,
-				IsControl:    isControl,
-				IsPayloadArr: isPayloadArr,
+				Payload:        streamLogEntry.Payload,
+				AuxData:        logEntry.AuxData,
+				MsgSeqNum:      streamLogEntry.MsgSeqNum,
+				LogSeqNum:      logEntry.SeqNum,
+				IsControl:      isControl,
+				IsPayloadArr:   isPayloadArr,
+				IsSyncToRecent: isSyncToRecent,
 				ProdId: commtypes.ProducerId{
 					TaskId:    streamLogEntry.TaskId,
 					TaskEpoch: streamLogEntry.TaskEpoch,

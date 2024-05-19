@@ -170,11 +170,12 @@ type RawMsg struct {
 
 	ProdId ProducerId
 
-	ScaleEpoch   uint16
-	IsControl    bool
-	IsPayloadArr bool
-	ProdIdx      uint8
-	Mark         EpochMark
+	ScaleEpoch     uint16
+	IsControl      bool
+	IsPayloadArr   bool
+	IsSyncToRecent bool
+	ProdIdx        uint8
+	Mark           EpochMark
 }
 
 func (r *RawMsg) FormatMsgMeta() string {

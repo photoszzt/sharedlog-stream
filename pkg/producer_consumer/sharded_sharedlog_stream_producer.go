@@ -4,14 +4,17 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sharedlog-stream/pkg/bits"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	eo_intr "sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
+	"slices"
 	"time"
 
+	"cs.utexas.edu/zjia/faas/types"
 	"github.com/rs/zerolog/log"
 )
 
@@ -129,16 +132,20 @@ func (sls *ShardedSharedLogStreamProducer) ProduceCtrlMsg(ctx context.Context, m
 			if err != nil {
 				return 0, err
 			}
-			// env := ctx.Value(commtypes.ENVID{}).(types.Environment)
-			// tag := sharedlog_stream.NameHashWithPartition(sls.stream.TopicNameHash(), parNum)
-			// logEntry, err := env.SharedLogReadNext(ctx, tag, off)
-			// if err != nil {
-			// 	return 0, err
-			// }
-			// sEntry := sharedlog_stream.DecodeStreamLogEntry(logEntry)
-			// isControl := bits.Has(bits.Bits(sEntry.Meta), sharedlog_stream.Control)
-			// debug.Assert(isControl, "should read back the stream end")
-			// debug.Assert(logEntry.SeqNum == off, "should read back the stream end")
+			env := ctx.Value(commtypes.ENVID{}).(types.Environment)
+			tag := sharedlog_stream.NameHashWithPartition(sls.stream.TopicNameHash(), parNum)
+			logEntry, err := env.SharedLogReadNext(ctx, tag, off)
+			if err != nil {
+				return 0, err
+			}
+			sEntry := sharedlog_stream.DecodeStreamLogEntry(logEntry)
+			isControl := bits.Has(bits.Bits(sEntry.Meta), sharedlog_stream.Control)
+			debug.Assert(sls.eom.GetCurrentEpoch() == sEntry.TaskEpoch, "task epoch should match")
+			debug.Assert(sls.eom.GetCurrentTaskId() == sEntry.TaskId, "task id should match")
+			debug.Assert(isControl, "should read back the stream end")
+			debug.Assert(logEntry.SeqNum == off, "should read back the stream end")
+			debug.Assert(sEntry.TopicName[0] == sls.stream.TopicName(), "topic name should match")
+			debug.Assert(slices.Equal(sEntry.Payload, msg.Payload), "payload should be the same")
 		}
 		return len(parNums), nil
 	} else if msg.Mark == commtypes.CHKPT_MARK {

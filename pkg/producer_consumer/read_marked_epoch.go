@@ -66,6 +66,9 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 		if err != nil {
 			return nil, err
 		}
+		if rawMsg.IsSyncToRecent {
+			continue
+		}
 		// nowMs := time.Now().UnixMilli()
 		// emc.streamTime.AddSample(nowMs - rawMsg.InjTsMs)
 

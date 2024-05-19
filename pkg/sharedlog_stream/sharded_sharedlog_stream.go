@@ -404,15 +404,32 @@ func (s *ShardedSharedLogStream) ReadNext(ctx context.Context, parNumber uint8) 
 	return msg, err
 }
 
-func (s *ShardedSharedLogStream) ReadNextWithTag(
-	ctx context.Context, parNumber uint8, tag uint64,
-) (*commtypes.RawMsg, error) {
+func (s *ShardedSharedLogStream) SyncToRecent(ctx context.Context, parNumber uint8, producerId commtypes.ProducerId) (uint64, error) {
 	if parNumber >= s.numPartitions {
-		return nil, xerrors.Errorf("Invalid partition number: %d", parNumber)
+		return 0, xerrors.Errorf("Invalid partition number: %d", parNumber)
 	}
 	par := parNumber
 	shard := s.subSharedLogStreams[par]
-	msg, err := shard.Stream.ReadNextWithTag(ctx, parNumber, tag)
+	meta := SyncToRecentMeta()
+	tags := []uint64{
+		NameHashWithPartition(shard.Stream.topicNameHash, parNumber),
+	}
+	off, err := shard.Stream.PushWithTag(ctx, nil, 0, tags, nil,
+		meta, producerId)
+	if err != nil {
+		return 0, fmt.Errorf("PushWithTag: %v", err)
+	}
+	return off, nil
+}
+
+func (s *ShardedSharedLogStream) ReadNextWithTag(
+	ctx context.Context, parNum uint8, tag uint64,
+) (*commtypes.RawMsg, error) {
+	if parNum >= s.numPartitions {
+		return nil, xerrors.Errorf("Invalid partition number: %d", parNum)
+	}
+	shard := s.subSharedLogStreams[parNum]
+	msg, err := shard.Stream.ReadNextWithTag(ctx, parNum, tag)
 	return msg, err
 }
 

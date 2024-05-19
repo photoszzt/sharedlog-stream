@@ -42,11 +42,15 @@ func DumpOutputStream(ctx context.Context, args DumpOutputStreamConfig) error {
 		if err != nil {
 			return err
 		}
+		off, err := log.SyncToRecent(ctx, i, commtypes.EmptyProducerId)
+		if err != nil {
+			return err
+		}
 		for {
 			// fmt.Fprintf(os.Stderr, "before read next\n")
 			rawMsg, err := log.ReadNext(ctx, i)
 			if err != nil {
-				if xerrors.Is(err, common_errors.ErrStreamEmpty) {
+				if xerrors.Is(err, common_errors.ErrStreamEmpty) && log.GetCuror(i) >= off {
 					break
 				}
 				return err
@@ -66,7 +70,7 @@ func DumpOutputStream(ctx context.Context, args DumpOutputStreamConfig) error {
 				if writted != len(outStr) {
 					panic("written is smaller than expected")
 				}
-			} else {
+			} else if !rawMsg.IsSyncToRecent {
 				msgAndSeq, err := commtypes.DecodeRawMsg(rawMsg, args.MsgSerde, payloadArrSerde)
 				if err != nil {
 					return err
