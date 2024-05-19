@@ -299,11 +299,8 @@ func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNu
 func (s *ShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, parNum uint8,
 	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
 ) error {
-	// idTmp := ctx.Value(commtypes.CTXID{})
-	// id := ""
-	// if idTmp != nil {
-	// 	id = idTmp.(string)
-	// }
+	id := commtypes.GetCtxId(ctx)
+	_ = id
 	// debug.Fprintf(os.Stderr, "[id=%s] %s(%d) before bufpush\n", id, s.topicName, parNum)
 	err := s.subSharedLogStreams[parNum].BufPushAutoFlushGoroutineSafe(ctx, payload, producerId, flushCallback)
 	// debug.Fprintf(os.Stderr, "[id=%s] %s(%d) after bufpush\n", id, s.topicName, parNum)
@@ -313,20 +310,13 @@ func (s *ShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, pa
 func (s *ShardedSharedLogStream) Flush(ctx context.Context,
 	producerId commtypes.ProducerId,
 ) (uint32, error) {
-	// idTmp := ctx.Value(commtypes.CTXID{})
-	// id := ""
-	// if idTmp != nil {
-	// 	id = idTmp.(string)
-	// }
 	flushed := uint32(0)
 	for i := uint8(0); i < s.numPartitions; i++ {
-		// debug.Fprintf(os.Stderr, "[id=%s] %s(%d) before flush\n", id, s.topicName, i)
 		f, err := s.subSharedLogStreams[i].FlushGoroutineSafe(ctx, producerId)
 		if err != nil {
 			return 0, err
 		}
 		flushed += f
-		// debug.Fprintf(os.Stderr, "[id=%s] %s(%d) after flush\n", id, s.topicName, i)
 	}
 	return flushed, nil
 }
