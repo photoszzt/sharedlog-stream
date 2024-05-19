@@ -258,7 +258,7 @@ func pausedFlushMark(
 	flushTime := stats.Elapsed(flushAllStart).Microseconds()
 
 	mPartBeg := time.Now()
-	logOff, shouldExit, err := markEpoch(ctx, meta)
+	logOff, _, err := markEpoch(ctx, meta)
 	if err != nil {
 		return false, common.GenErrFnOutput(fmt.Errorf("markEpoch: %v", err))
 	}
@@ -280,7 +280,7 @@ func pausedFlushMark(
 		meta.t.flushAtLeastOne.AddSample(flushTime)
 	}
 	meta.t.epochMarkTimes += 1
-	return shouldExit, nil
+	return false, nil
 }
 
 type epochProcessMeta struct {
@@ -333,23 +333,23 @@ func processInEpoch(
 		shouldMarkByTime := meta.args.commitEvery != 0 && timeSinceLastMark >= meta.args.commitEvery
 		if shouldMarkByTime && hasProcessData {
 			// execIntrMs.AddSample(timeSinceLastMark.Milliseconds())
-			shouldExit, fn_out := pausedFlushMark(ctx, meta, &snapshotTime, &snapshotTimer, &paused)
+			_, fn_out := pausedFlushMark(ctx, meta, &snapshotTime, &snapshotTimer, &paused)
 			if fn_out != nil {
 				return fn_out
 			}
-			if shouldExit {
-				ret := &common.FnOutput{Success: true}
-				if testForFail {
-					ret = &common.FnOutput{Success: true, Message: common_errors.ErrReturnDueToTest.Error()}
-				}
-				fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", meta.t.epochMarkTimes)
-				meta.t.PrintRemainingStats()
-				// execIntrMs.PrintRemainingStats()
-				// thisAndLastCmtMs.PrintRemainingStats()
-				updateReturnMetric(ret, &warmupCheck,
-					false, meta.t.GetEndDuration(), meta.args.ectx.SubstreamNum())
-				return ret
-			}
+			// if shouldExit {
+			// 	ret := &common.FnOutput{Success: true}
+			// 	if testForFail {
+			// 		ret = &common.FnOutput{Success: true, Message: common_errors.ErrReturnDueToTest.Error()}
+			// 	}
+			// 	fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", meta.t.epochMarkTimes)
+			// 	meta.t.PrintRemainingStats()
+			// 	// execIntrMs.PrintRemainingStats()
+			// 	// thisAndLastCmtMs.PrintRemainingStats()
+			// 	updateReturnMetric(ret, &warmupCheck,
+			// 		false, meta.t.GetEndDuration(), meta.args.ectx.SubstreamNum())
+			// 	return ret
+			// }
 			hasProcessData = false
 			// btwThisLastCmt := time.Since(markTimer)
 			// thisAndLastCmtMs.AddSample(btwThisLastCmt.Milliseconds())

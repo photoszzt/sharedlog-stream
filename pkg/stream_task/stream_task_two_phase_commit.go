@@ -322,16 +322,16 @@ func commitTransaction(ctx context.Context,
 	sendOffsetElapsed := stats.Elapsed(offsetBeg).Microseconds()
 
 	var logOff uint64
-	var shouldExit bool
+	// var shouldExit bool
 	cBeg := stats.TimerBegin()
 	if env_config.ASYNC_SECOND_PHASE && !finalCommit {
-		logOff, shouldExit, err = meta.tm.CommitTransactionAsyncComplete(ctx)
+		logOff, _, err = meta.tm.CommitTransactionAsyncComplete(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[ERROR] commitAsyncComplete failed: %v\n", err)
 			return common.GenErrFnOutput(fmt.Errorf("commitAsyncComplete failed: %v\n", err))
 		}
 	} else {
-		logOff, shouldExit, err = meta.tm.CommitTransaction(ctx)
+		logOff, _, err = meta.tm.CommitTransaction(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[ERROR] commit failed: %v\n", err)
 			return common.GenErrFnOutput(fmt.Errorf("commit failed: %v\n", err))
@@ -364,8 +364,8 @@ func commitTransaction(ctx context.Context,
 	if f > 0 {
 		meta.t.flushAtLeastOne.AddSample(flushTime)
 	}
-	if shouldExit {
-		return &common.FnOutput{Success: true, Message: "exit"}
-	}
+	// if shouldExit {
+	// 	return &common.FnOutput{Success: true, Message: "exit"}
+	// }
 	return nil
 }
