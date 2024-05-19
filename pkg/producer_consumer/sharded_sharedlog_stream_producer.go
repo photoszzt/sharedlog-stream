@@ -129,6 +129,16 @@ func (sls *ShardedSharedLogStreamProducer) ProduceCtrlMsg(ctx context.Context, m
 			if err != nil {
 				return 0, err
 			}
+			// env := ctx.Value(commtypes.ENVID{}).(types.Environment)
+			// tag := sharedlog_stream.NameHashWithPartition(sls.stream.TopicNameHash(), parNum)
+			// logEntry, err := env.SharedLogReadNext(ctx, tag, off)
+			// if err != nil {
+			// 	return 0, err
+			// }
+			// sEntry := sharedlog_stream.DecodeStreamLogEntry(logEntry)
+			// isControl := bits.Has(bits.Bits(sEntry.Meta), sharedlog_stream.Control)
+			// debug.Assert(isControl, "should read back the stream end")
+			// debug.Assert(logEntry.SeqNum == off, "should read back the stream end")
 		}
 		return len(parNums), nil
 	} else if msg.Mark == commtypes.CHKPT_MARK {
