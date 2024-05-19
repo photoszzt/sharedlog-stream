@@ -46,6 +46,10 @@ type OnlyUpdateInMemStoreG[K, V any] interface {
 	PutWithoutPushToChangelogG(ctx context.Context, key K, value V) error
 }
 
+type StoreWithFlush interface {
+	Flush(ctx context.Context) (uint32, error)
+}
+
 type KeyValueStoreOp interface {
 	OnlyUpdateInMemStore
 	Flush(ctx context.Context) (uint32, error)
