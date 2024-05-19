@@ -104,9 +104,10 @@ func (s MessageGMsgpSerdeG[K, V]) Encode(val MessageG[K, V]) ([]byte, *[]byte, e
 	if !ok {
 		return nil, nil, nil
 	}
-	b := PopBuffer(msgSer.Msgsize())
-	buf := *b
-	ret, err := msgSer.MarshalMsg(buf[:0])
+	// b := PopBuffer(msgSer.Msgsize())
+	// buf := *b
+	// ret, err := msgSer.MarshalMsg(buf[:0])
+	ret, err := msgSer.MarshalMsg(nil)
 	if s.keySerde.UsedBufferPool() && kbuf != nil {
 		*kbuf = msgSer.KeyEnc
 		PushBuffer(kbuf)
@@ -115,7 +116,8 @@ func (s MessageGMsgpSerdeG[K, V]) Encode(val MessageG[K, V]) ([]byte, *[]byte, e
 		*vbuf = msgSer.ValueEnc
 		PushBuffer(vbuf)
 	}
-	return ret, b, err
+	// return ret, b, err
+	return ret, nil, err
 }
 
 func (s MessageGMsgpSerdeG[K, V]) Decode(value []byte) (MessageG[K, V], error) {
