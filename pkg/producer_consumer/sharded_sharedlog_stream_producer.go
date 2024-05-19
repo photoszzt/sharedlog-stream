@@ -178,6 +178,23 @@ func (sls *ShardedSharedLogStreamProducer) ProduceDataNoLock(ctx context.Context
 		return err
 	}
 	if bytes != nil {
+		// vret, err := sls.msgSerSerde.Decode(bytes)
+		// if err != nil {
+		// 	log.Fatal().Err(err).Msg("fail to decode encoded bytes")
+		// }
+		// if !msgSer.Equal(&vret) {
+		// 	rdbg.PrintStack()
+		// 	log.Fatal().Err(err).
+		// 		Bytes("inKeyEnc", msgSer.KeyEnc).
+		// 		Bytes("inValEnc", msgSer.ValueEnc).
+		// 		Int64("inInjTms", msgSer.InjTMs).
+		// 		Int64("inTs", msgSer.TimestampMs).
+		// 		Bytes("retKeyEnc", vret.KeyEnc).
+		// 		Bytes("retValEnc", vret.ValueEnc).
+		// 		Int64("retInjTms", vret.InjTMs).
+		// 		Int64("retTs", vret.TimestampMs).
+		// 		Msg("encode and redecode doesn't get back same input")
+		// }
 		if sls.bufPush {
 			return sls.bufpushNoLock(ctx, bytes, parNum)
 		} else {

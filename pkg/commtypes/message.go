@@ -2,11 +2,13 @@ package commtypes
 
 import (
 	"fmt"
+	rdbg "runtime/debug"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/utils"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
 
@@ -43,9 +45,9 @@ type MessageG[K, V any] struct {
 	InjTMs        int64
 }
 
-var _ = fmt.Stringer(Message{})
+var _ = fmt.Stringer(&MessageG[int, int]{})
 
-func (m MessageG[K, V]) String() string {
+func (m *MessageG[K, V]) String() string {
 	return fmt.Sprintf("Msg: {Key: %v, Value: %v, Ts: %d, InjectTs: %d}", m.Key, m.Value, m.TimestampMs, m.InjTMs)
 }
 
@@ -114,9 +116,9 @@ func MessageGToMessage[K, V any](msgG MessageG[K, V]) Message {
 	return Message{Key: k, Value: v, Timestamp: msgG.TimestampMs, InjT: msgG.InjTMs}
 }
 
-var _ = fmt.Stringer(Message{})
+var _ = fmt.Stringer(&Message{})
 
-func (m Message) String() string {
+func (m *Message) String() string {
 	return fmt.Sprintf("Msg: {Key: %v, Value: %v, Ts: %d, InjectTs: %d}", m.Key, m.Value, m.Timestamp, m.InjT)
 }
 
@@ -309,7 +311,8 @@ func DecodeRawMsgSeqG[K, V any](rawMsg *RawMsgAndSeq, msgSerde MessageGSerdeG[K,
 		for _, payload := range rawMsg.PayloadArr {
 			msg, err := msgSerde.Decode(payload)
 			if err != nil {
-				log.Error().Err(err).Stack().Uint64("LogSeqNum", rawMsg.LogSeqNum).Msg("fail to decode msg")
+				rdbg.PrintStack()
+				log.Error().Err(errors.Wrap(err, "fail to decode RawMsgSeqG")).Stack().Uint64("LogSeqNum", rawMsg.LogSeqNum).Msg("fail to decode msg")
 				return nil, fmt.Errorf("fail to decode msg 1: %v, serde: %+v", err, msgSerde)
 			}
 			msgArr = append(msgArr, msg)

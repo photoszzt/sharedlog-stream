@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/utils"
+	"slices"
 )
 
 type MessageSerialized struct {
@@ -23,6 +24,27 @@ func (m *MessageSerialized) UpdateInjectTime(ts int64) {
 
 func (m *MessageSerialized) ExtractInjectTimeMs() int64 {
 	return m.InjTMs
+}
+
+func compareSlice(a, b []byte) bool {
+	var equal bool
+	if a != nil {
+		if b != nil {
+			equal = slices.Equal(a, b)
+		} else {
+			equal = len(a) == 0
+		}
+	} else {
+		equal = len(b) == 0
+	}
+	return equal
+}
+
+func (m *MessageSerialized) Equal(b *MessageSerialized) bool {
+	keyEqual := compareSlice(m.KeyEnc, b.KeyEnc)
+	valEqual := compareSlice(m.ValueEnc, b.ValueEnc)
+	return keyEqual && valEqual &&
+		m.InjTMs == b.InjTMs && m.TimestampMs == b.TimestampMs
 }
 
 func convertToMsgSer(value interface{}, keySerde Serde, valSerde Serde) (msg *MessageSerialized, kbuf *[]byte, vbuf *[]byte, err error) {
