@@ -55,7 +55,7 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 		}
 		timeSinceLastTrack := time.Since(commitTimer)
 		if timeSinceLastTrack >= args.trackEveryForAtLeastOnce {
-			if ret_err := track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum()); ret_err != nil {
+			if ret_err := track(ctx, cm, args.ectx.Consumers()); ret_err != nil {
 				return ret_err
 			}
 			hasUntrackedConsume = false
@@ -80,7 +80,7 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 			if ret_err := pauseTimedFlushStreams(ctx, t, args); ret_err != nil {
 				return ret_err
 			}
-			if ret_err := track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum()); ret_err != nil {
+			if ret_err := track(ctx, cm, args.ectx.Consumers()); ret_err != nil {
 				return ret_err
 			}
 			return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck, nil)
@@ -98,7 +98,7 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 }
 
 func track(ctx context.Context, cm *consume_seq_num_manager.ConsumeSeqManager,
-	consumers []*producer_consumer.MeteredConsumer, substreamNum uint8,
+	consumers []*producer_consumer.MeteredConsumer,
 ) *common.FnOutput {
 	markers := consume_seq_num_manager.CollectOffsetMarker(consumers)
 	err := cm.Track(ctx, markers)

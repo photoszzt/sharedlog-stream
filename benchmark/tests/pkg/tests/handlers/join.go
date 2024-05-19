@@ -108,7 +108,6 @@ func getJoinSrcSink(ctx context.Context, sp *common.TestParam,
 
 func getMaterializedParam[K, V any](storeName string,
 	kvMsgSerde commtypes.MessageGSerdeG[K, V],
-	env types.Environment,
 	sp *common.TestParam,
 ) (*store_with_changelog.MaterializeParam[K, V], error) {
 	return store_with_changelog.NewMaterializeParamBuilder[K, V]().
@@ -161,11 +160,11 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 			debug.Fprintf(os.Stderr, "left val: %v, ts: %d, right val: %v, ts: %d\n", leftValue, leftTs, rightValue, rightTs)
 			return optional.Some(fmt.Sprintf("%s+%s", leftValue.Value, rightValue.Value))
 		})
-	oneMp, err := getMaterializedParam[int, commtypes.ValueTimestampG[string]]("oneStore", msgSerde, h.env, sp)
+	oneMp, err := getMaterializedParam[int, commtypes.ValueTimestampG[string]]("oneStore", msgSerde, sp)
 	if err != nil {
 		panic(err)
 	}
-	twoMp, err := getMaterializedParam[int, commtypes.ValueTimestampG[string]]("twoStore", msgSerde, h.env, sp)
+	twoMp, err := getMaterializedParam[int, commtypes.ValueTimestampG[string]]("twoStore", msgSerde, sp)
 	if err != nil {
 		panic(err)
 	}

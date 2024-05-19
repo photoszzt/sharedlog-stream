@@ -69,7 +69,7 @@ func getConsumeTransactionManager(
 }
 */
 
-func (h *produceConsumeHandler) beginTransaction(ctx context.Context,
+func (h *produceConsumeHandler) beginTransaction(
 	tm *transaction.TransactionManager, stream1 *sharedlog_stream.ShardedSharedLogStream,
 ) {
 	tm.AddTopicSubstream(stream1.TopicName(), 0)
@@ -115,8 +115,8 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 	produceSink.ConfigExactlyOnce(tm1, exactly_once_intr.TWO_PHASE_COMMIT)
 	produceSinkCopy.ConfigExactlyOnce(tm2, exactly_once_intr.TWO_PHASE_COMMIT)
 
-	h.beginTransaction(ctx, tm1, stream1)
-	h.beginTransaction(ctx, tm2, stream1Copy)
+	h.beginTransaction(tm1, stream1)
+	h.beginTransaction(tm2, stream1Copy)
 
 	// producer1 push 1 msg to sink
 	msgForTm1 := []commtypes.MessageG[int, string]{

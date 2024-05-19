@@ -273,7 +273,7 @@ func (c *Cache[K, V]) evict() error {
 	return nil
 }
 
-func (c *Cache[K, V]) flush(element *genericlist.Element[LRUElement[K, V]]) error {
+func (c *Cache[K, V]) flush(*genericlist.Element[LRUElement[K, V]]) error {
 	c.mux.Lock()
 	err := c.flushLockHeld(nil)
 	c.mux.Unlock()

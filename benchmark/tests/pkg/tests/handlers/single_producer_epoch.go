@@ -195,9 +195,6 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 		panic(err)
 	}
 	epochMarkerTags, epochMarkerTopics = em1.GenTagsAndTopicsForEpochMarker()
-	if err != nil {
-		panic(err)
-	}
 	_, _, err = em1.MarkEpoch(ctx, epochMarker, epochMarkerTags, epochMarkerTopics)
 	if err != nil {
 		panic(err)

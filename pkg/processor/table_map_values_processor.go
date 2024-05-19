@@ -136,8 +136,5 @@ func (p *TableMapValuesProcessorG[K, V, VR]) ProcessAndReturn(ctx context.Contex
 		TimestampMs:   msg.TimestampMs,
 		StartProcTime: msg.StartProcTime,
 	}
-	if err != nil {
-		return nil, err
-	}
 	return []commtypes.MessageG[K, commtypes.ChangeG[VR]]{newMsg}, nil
 }

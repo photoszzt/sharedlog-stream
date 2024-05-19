@@ -17,7 +17,7 @@ func toStrSet(data []string) map[string]struct{} {
 	return d
 }
 
-func checkPut(ctx context.Context, store *SegmentedWindowStoreG[uint32, string],
+func checkPut(ctx context.Context,
 	segments Segments, t testing.TB, expected map[string]struct{},
 ) {
 	segs, err := segments.GetSegmentNamesFromRemote(ctx)
@@ -37,17 +37,17 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStoreG[uint32, strin
 	checkErr(store.Put(ctx, uint32(0), optional.Some("zero"), startTime, TimeMeta{RecordTsMs: 0}), t)
 	names := map[string]struct{}{segments.SegmentName(2): {}}
 	debug.Fprint(os.Stderr, "1\n")
-	checkPut(ctx, store, segments, t, names)
+	checkPut(ctx, segments, t, names)
 
 	checkErr(store.Put(ctx, uint32(1), optional.Some("one"), startTime+increment, TimeMeta{RecordTsMs: 0}), t)
 	names = map[string]struct{}{segments.SegmentName(2): {}}
 	debug.Fprint(os.Stderr, "2\n")
-	checkPut(ctx, store, segments, t, names)
+	checkPut(ctx, segments, t, names)
 
 	checkErr(store.Put(ctx, uint32(2), optional.Some("two"), startTime+increment*2, TimeMeta{RecordTsMs: 0}), t)
 	names = map[string]struct{}{segments.SegmentName(2): {}, segments.SegmentName(3): {}}
 	debug.Fprint(os.Stderr, "3\n")
-	checkPut(ctx, store, segments, t, names)
+	checkPut(ctx, segments, t, names)
 
 	checkErr(store.Put(ctx, uint32(4), optional.Some("four"), startTime+increment*4, TimeMeta{RecordTsMs: 0}), t)
 	names = map[string]struct{}{
@@ -56,7 +56,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStoreG[uint32, strin
 		segments.SegmentName(4): {},
 	}
 	debug.Fprint(os.Stderr, "4\n")
-	checkPut(ctx, store, segments, t, names)
+	checkPut(ctx, segments, t, names)
 
 	checkErr(store.Put(ctx, uint32(5), optional.Some("five"), startTime+increment*5, TimeMeta{RecordTsMs: 0}), t)
 	names = map[string]struct{}{
@@ -65,7 +65,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStoreG[uint32, strin
 		segments.SegmentName(4): {},
 	}
 	debug.Fprint(os.Stderr, "5\n")
-	checkPut(ctx, store, segments, t, names)
+	checkPut(ctx, segments, t, names)
 
 	debug.Fprint(os.Stderr, "6\n")
 	resM, err := assertFetchG(ctx, store, 0, startTime-TEST_WINDOW_SIZE, startTime+TEST_WINDOW_SIZE)
@@ -134,7 +134,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStoreG[uint32, strin
 		segments.SegmentName(4): {},
 		segments.SegmentName(5): {},
 	}
-	checkPut(ctx, store, segments, t, names)
+	checkPut(ctx, segments, t, names)
 
 	debug.Fprint(os.Stderr, "13\n")
 	resM, err = assertFetchG(ctx, store, 0, startTime-TEST_WINDOW_SIZE, startTime+TEST_WINDOW_SIZE)
@@ -213,7 +213,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStoreG[uint32, strin
 		segments.SegmentName(4): {},
 		segments.SegmentName(5): {},
 	}
-	checkPut(ctx, store, segments, t, names)
+	checkPut(ctx, segments, t, names)
 
 	debug.Fprint(os.Stderr, "21\n")
 	resM, err = assertFetchG(ctx, store, 0, startTime-TEST_WINDOW_SIZE, startTime+TEST_WINDOW_SIZE)
@@ -295,7 +295,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStoreG[uint32, strin
 		segments.SegmentName(5): {},
 		segments.SegmentName(6): {},
 	}
-	checkPut(ctx, store, segments, t, names)
+	checkPut(ctx, segments, t, names)
 
 	resM, err = assertFetchG(ctx, store, 0, startTime-TEST_WINDOW_SIZE, startTime+TEST_WINDOW_SIZE)
 	if err != nil {
@@ -383,5 +383,5 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStoreG[uint32, strin
 		segments.SegmentName(5): {},
 		segments.SegmentName(6): {},
 	}
-	checkPut(ctx, store, segments, t, names)
+	checkPut(ctx, segments, t, names)
 }

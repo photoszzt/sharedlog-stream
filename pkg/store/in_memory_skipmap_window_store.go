@@ -211,7 +211,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Fetch(ctx context.Context, key K, ti
 			Version: math.MaxUint32,
 			Key:     key,
 		}
-		return s.fetchWithKeyRangeWithDuplicates(ctx, keyFrom, keyTo, tsFrom, tsTo, iterFunc)
+		return s.fetchWithKeyRangeWithDuplicates(keyFrom, keyTo, tsFrom, tsTo, iterFunc)
 	} else {
 		s.storeNoDup.RangeFrom(tsFrom, func(ts int64, kvmap *skipmap.FuncMap[K, V]) bool {
 			if ts > tsTo {
@@ -265,7 +265,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) FetchWithKeyRange(ctx context.Contex
 			Version: math.MaxUint32,
 			Key:     keyTo,
 		}
-		return s.fetchWithKeyRangeWithDuplicates(ctx, kFrom, kTo, tsFrom, tsTo, iterFunc)
+		return s.fetchWithKeyRangeWithDuplicates(kFrom, kTo, tsFrom, tsTo, iterFunc)
 	} else {
 		s.storeNoDup.RangeFrom(tsFrom, func(ts int64, kvmap *skipmap.FuncMap[K, V]) bool {
 			if ts > tsTo {
@@ -287,7 +287,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) FetchWithKeyRange(ctx context.Contex
 	}
 }
 
-func (s *InMemorySkipMapWindowStoreG[K, V]) fetchWithKeyRangeWithDuplicates(ctx context.Context,
+func (s *InMemorySkipMapWindowStoreG[K, V]) fetchWithKeyRangeWithDuplicates(
 	keyFrom VersionedKeyG[K], keyTo VersionedKeyG[K], timeFrom int64, timeTo int64,
 	iterFunc func(int64, K, V) error,
 ) error {

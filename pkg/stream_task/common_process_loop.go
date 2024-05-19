@@ -88,6 +88,7 @@ func processMsgAndSeq[K, V any](ctx context.Context,
 	beforeInjToStreamTs int64,
 ) error {
 	// meteredConsumer := args.Consumers()[0]
+	_ = beforeInjToStreamTs
 	if msg.MsgArr != nil {
 		for _, subMsg := range msg.MsgArr {
 			if subMsg.Key.IsNone() && subMsg.Value.IsNone() {
