@@ -162,20 +162,23 @@ func (e Float64Encoder) Encode(value interface{}) ([]byte, *[]byte, error) {
 	}
 	v := value.(float64)
 	bits := math.Float64bits(v)
-	b := PopBuffer(8)
-	bs := *b
-	bs = Require(bs[:0], 8)
+	// b := PopBuffer(8)
+	// bs := *b
+	// bs = Require(bs[:0], 8)
+	bs := make([]byte, 0, 8)
 	bs = binary.BigEndian.AppendUint64(bs, bits)
-	return bs, b, nil
+	// return bs, b, nil
+	return bs, nil, nil
 }
 
 func (e Float64EncoderG) Encode(value float64) ([]byte, *[]byte, error) {
 	bits := math.Float64bits(value)
-	b := PopBuffer(8)
-	bs := *b
-	bs = Require(bs[:0], 8)
+	// b := PopBuffer(8)
+	// bs := *b
+	// bs = Require(bs[:0], 8)
+	bs := make([]byte, 0, 8)
 	bs = binary.BigEndian.AppendUint64(bs, bits)
-	return bs, b, nil
+	return bs, nil, nil
 }
 
 type (
@@ -220,8 +223,8 @@ type Float64SerdeG struct {
 	Float64DecoderG
 }
 
-func (Float64SerdeG) UsedBufferPool() bool { return true }
-func (Float64Serde) UsedBufferPool() bool  { return true }
+func (Float64SerdeG) UsedBufferPool() bool { return false }
+func (Float64Serde) UsedBufferPool() bool  { return false }
 func (Float64SerdeG) String() string       { return "Float64SerdeG" }
 func (Float64Serde) String() string        { return "Float64Serde" }
 
@@ -337,19 +340,23 @@ func (e Uint64Encoder) Encode(value interface{}) ([]byte, *[]byte, error) {
 		return nil, nil, nil
 	}
 	v := value.(uint64)
-	b := PopBuffer(8)
-	bs := *b
-	bs = Require(bs[:0], 8)
+	// b := PopBuffer(8)
+	// bs := *b
+	// bs = Require(bs[:0], 8)
+	bs := make([]byte, 0, 8)
 	bs = binary.BigEndian.AppendUint64(bs, v)
-	return bs, b, nil
+	// return bs, b, nil
+	return bs, nil, nil
 }
 
 func (e Uint64EncoderG) Encode(value uint64) ([]byte, *[]byte, error) {
-	b := PopBuffer(8)
-	bs := *b
-	bs = Require(bs[:0], 8)
+	// b := PopBuffer(8)
+	// bs := *b
+	// bs = Require(bs[:0], 8)
+	bs := make([]byte, 0, 8)
 	bs = binary.BigEndian.AppendUint64(bs, value)
-	return bs, b, nil
+	// return bs, b, nil
+	return bs, nil, nil
 }
 
 type (
@@ -394,8 +401,8 @@ type Uint64SerdeG struct {
 	Uint64DecoderG
 }
 
-func (Uint64SerdeG) UsedBufferPool() bool { return true }
-func (Uint64Serde) UsedBufferPool() bool  { return true }
+func (Uint64SerdeG) UsedBufferPool() bool { return false }
+func (Uint64Serde) UsedBufferPool() bool  { return false }
 func (Uint64SerdeG) String() string       { return "Uint64SerdeG" }
 func (Uint64Serde) String() string        { return "Uint64Serde" }
 
