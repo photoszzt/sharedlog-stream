@@ -592,18 +592,19 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context) (uint64, bo
 	// 	debug.Fprintf(os.Stderr, "Fail to transition from %s to PREPARE_COMMIT\n", tc.currentStatus.String())
 	// 	return 0, false, common_errors.ErrInvalidStateTransition
 	// }
-	rawMsgs, err := tc.SyncToRecent(ctx)
-	if err != nil {
-		return 0, false, fmt.Errorf("SyncToRecent: %v", err)
-	}
-	for _, rawMsg := range rawMsgs {
-		if rawMsg.Mark == commtypes.FENCE {
-			if (rawMsg.ProdId.TaskId == tc.GetCurrentTaskId() && rawMsg.ProdId.TaskEpoch > tc.GetCurrentEpoch()) ||
-				rawMsg.ProdId.TaskId != tc.GetCurrentTaskId() {
-				return 0, true, nil
-			}
-		}
-	}
+
+	// rawMsgs, err := tc.SyncToRecent(ctx)
+	// if err != nil {
+	// 	return 0, false, fmt.Errorf("SyncToRecent: %v", err)
+	// }
+	// for _, rawMsg := range rawMsgs {
+	// 	if rawMsg.Mark == commtypes.FENCE {
+	// 		if (rawMsg.ProdId.TaskId == tc.GetCurrentTaskId() && rawMsg.ProdId.TaskEpoch > tc.GetCurrentEpoch()) ||
+	// 			rawMsg.ProdId.TaskId != tc.GetCurrentTaskId() {
+	// 			return 0, true, nil
+	// 		}
+	// 	}
+	// }
 
 	// first phase of the commit
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
@@ -647,18 +648,18 @@ func (tc *TransactionManager) CommitTransactionAsyncComplete(ctx context.Context
 	// 	debug.Fprintf(os.Stderr, "Fail to transition from %s to PREPARE_COMMIT\n", tc.currentStatus.String())
 	// 	return 0, false, common_errors.ErrInvalidStateTransition
 	// }
-	rawMsgs, err := tc.SyncToRecent(ctx)
-	if err != nil {
-		return 0, false, fmt.Errorf("SyncToRecent: %v", err)
-	}
-	for _, rawMsg := range rawMsgs {
-		if rawMsg.Mark == commtypes.FENCE {
-			if (rawMsg.ProdId.TaskId == tc.GetCurrentTaskId() && rawMsg.ProdId.TaskEpoch > tc.GetCurrentEpoch()) ||
-				rawMsg.ProdId.TaskId != tc.GetCurrentTaskId() {
-				return 0, true, nil
-			}
-		}
-	}
+	// rawMsgs, err := tc.SyncToRecent(ctx)
+	// if err != nil {
+	// 	return 0, false, fmt.Errorf("SyncToRecent: %v", err)
+	// }
+	// for _, rawMsg := range rawMsgs {
+	// 	if rawMsg.Mark == commtypes.FENCE {
+	// 		if (rawMsg.ProdId.TaskId == tc.GetCurrentTaskId() && rawMsg.ProdId.TaskEpoch > tc.GetCurrentEpoch()) ||
+	// 			rawMsg.ProdId.TaskId != tc.GetCurrentTaskId() {
+	// 			return 0, true, nil
+	// 		}
+	// 	}
+	// }
 
 	// first phase of the commit
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)

@@ -494,18 +494,19 @@ func markEpoch(ctx context.Context,
 	meta *epochProcessMeta,
 ) (logOff uint64, shouldExit bool, err error) {
 	prepareStart := stats.TimerBegin()
-	rawMsgs, err := meta.em.SyncToRecent(ctx)
-	if err != nil {
-		return 0, false, fmt.Errorf("SyncToRecent: %v", err)
-	}
-	for _, rawMsg := range rawMsgs {
-		if rawMsg.Mark == commtypes.FENCE {
-			if (rawMsg.ProdId.TaskId == meta.em.GetCurrentTaskId() && rawMsg.ProdId.TaskEpoch > meta.em.GetCurrentEpoch()) ||
-				rawMsg.ProdId.TaskId != meta.em.GetCurrentTaskId() {
-				return 0, true, nil
-			}
-		}
-	}
+	// should rely on conditional append
+	// rawMsgs, err := meta.em.SyncToRecent(ctx)
+	// if err != nil {
+	// 	return 0, false, fmt.Errorf("SyncToRecent: %v", err)
+	// }
+	// for _, rawMsg := range rawMsgs {
+	// 	if rawMsg.Mark == commtypes.FENCE {
+	// 		if (rawMsg.ProdId.TaskId == meta.em.GetCurrentTaskId() && rawMsg.ProdId.TaskEpoch > meta.em.GetCurrentEpoch()) ||
+	// 			rawMsg.ProdId.TaskId != meta.em.GetCurrentTaskId() {
+	// 			return 0, true, nil
+	// 		}
+	// 	}
+	// }
 	epochMarker, err := epoch_manager.GenEpochMarker(ctx, meta.em, meta.args.ectx,
 		meta.args.kvChangelogs, meta.args.windowStoreChangelogs)
 	if err != nil {
