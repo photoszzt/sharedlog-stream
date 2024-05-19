@@ -10,6 +10,8 @@ import (
 	configscale "sharedlog-stream/benchmark/common/config_scale"
 
 	// _ "net/http/pprof"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/pkgerrors"
 
 	"cs.utexas.edu/zjia/faas"
 	"cs.utexas.edu/zjia/faas/types"
@@ -95,5 +97,6 @@ func (f *funcHandlerFactory) GrpcNew(env types.Environment, service string) (typ
 }
 
 func main() {
+	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	faas.Serve(&funcHandlerFactory{})
 }
