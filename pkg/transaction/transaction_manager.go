@@ -514,12 +514,12 @@ func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicT
 func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context) (WaitOrAppendedMeta, error) {
 	var waited WaitOrAppendedMeta = None
 	tc.mu.Lock()
-	defer tc.mu.Unlock()
 	if env_config.ASYNC_SECOND_PHASE && !tc.hasWaitForLastTxn.Load() {
 		// fmt.Fprintf(os.Stderr, "waiting for previous txn to finish\n")
 		tBeg := stats.TimerBegin()
 		err := tc.bgErrg.Wait()
 		if err != nil {
+			tc.mu.Unlock()
 			return None, err
 		}
 		tc.waitPrevTxn.AddSample(stats.Elapsed(tBeg).Microseconds())
@@ -554,12 +554,14 @@ func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context)
 		}
 		_, err := tc.appendToTransactionLog(ctx, txnMeta, []uint64{tc.txnLogTag})
 		if err != nil {
+			tc.mu.Unlock()
 			return None, err
 		}
 		tc.addedNewTpPar.Store(false)
 		// debug.Fprintf(os.Stderr, "done appending tp par to txn log\n")
 		tc.appendTxnMeta.AddSample(stats.Elapsed(tBeg).Microseconds())
 	}
+	tc.mu.Unlock()
 	return waited, nil
 }
 
