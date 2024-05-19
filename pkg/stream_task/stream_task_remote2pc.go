@@ -148,7 +148,7 @@ func SetupManagerForRemote2pc(ctx context.Context, t *StreamTask, args *StreamTa
 		return nil, nil, err
 	}
 	trackParFunc := func(topicName string, substreamId uint8) {
-		debug.Fprintf(os.Stderr, "track tp %s substreamid %d\n", topicName, substreamId)
+		// debug.Fprintf(os.Stderr, "track tp %s substreamid %d\n", topicName, substreamId)
 		client.AddTopicSubstream(topicName, substreamId)
 	}
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
