@@ -112,7 +112,7 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) Put(ctx context.Context,
 		Key:   optional.Some(keyTs),
 		Value: value,
 	}
-	msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, st.msgSerde.GetKeySerdeG(), st.msgSerde.GetValSerdeG())
+	msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, st.msgSerde)
 	if err != nil {
 		return err
 	}

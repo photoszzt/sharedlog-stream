@@ -33,7 +33,7 @@ func msgEncodeDecode[K, V comparable](t *testing.T, msg commtypes.MessageG[K, V]
 	if err != nil {
 		t.Fatal(err)
 	}
-	ret_msg, err := commtypes.MsgSerToMsgG(&ret_msgSer, msgSerde.GetKeySerdeG(), msgSerde.GetValSerdeG())
+	ret_msg, err := commtypes.MsgSerToMsgG(&ret_msgSer, msgSerde)
 	if err != nil {
 		t.Fatal(err)
 	}

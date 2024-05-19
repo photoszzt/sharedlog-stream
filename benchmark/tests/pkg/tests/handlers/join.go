@@ -387,7 +387,7 @@ func pushMsgsToSink[K, V any](ctx context.Context, sink producer_consumer.Produc
 	kUseBuf := outMsgSerde.GetKeySerdeG().UsedBufferPool()
 	vUseBuf := outMsgSerde.GetValSerdeG().UsedBufferPool()
 	for _, msg := range msgs {
-		msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, outMsgSerde.GetKeySerdeG(), outMsgSerde.GetValSerdeG())
+		msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, outMsgSerde)
 		if err != nil {
 			return err
 		}

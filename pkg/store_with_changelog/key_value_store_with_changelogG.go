@@ -94,7 +94,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, val
 		Value: value,
 	}
 	// pStart := stats.TimerBegin()
-	msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, st.msgSerde.GetKeySerdeG(), st.msgSerde.GetValSerdeG())
+	msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, st.msgSerde)
 	if err != nil {
 		return err
 	}
@@ -164,7 +164,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Delete(ctx context.Context, key K) 
 		Key:   optional.Some(key),
 		Value: optional.None[V](),
 	}
-	msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, st.msgSerde.GetKeySerdeG(), st.msgSerde.GetValSerdeG())
+	msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, st.msgSerde)
 	if err != nil {
 		return err
 	}

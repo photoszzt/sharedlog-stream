@@ -207,7 +207,7 @@ func procMsgWithSink[KIn, VIn, KOut, VOut any](ctx context.Context,
 		// procTime := time.Since(msg.StartProcTime)
 		// procArgs.procLat.AddSample(procTime.Nanoseconds())
 		// debug.Fprintf(os.Stderr, "k %v, v %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
-		msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, outMsgSerde.GetKeySerdeG(), outMsgSerde.GetValSerdeG())
+		msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, outMsgSerde)
 		if err != nil {
 			return err
 		}

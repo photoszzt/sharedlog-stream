@@ -49,7 +49,7 @@ func (p *RoundRobinOutputProcessorG[KIn, VIn]) Name() string {
 func (p *RoundRobinOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Context,
 	msg commtypes.MessageG[KIn, VIn],
 ) ([]commtypes.MessageG[any, any], error) {
-	msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, p.msgGSerdeG.GetKeySerdeG(), p.msgGSerdeG.GetValSerdeG())
+	msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, p.msgGSerdeG)
 	if err != nil {
 		return nil, err
 	}

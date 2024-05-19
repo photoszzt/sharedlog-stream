@@ -58,7 +58,7 @@ func (g *GroupByOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Context
 	// }
 	// procTime := time.Since(msg.StartProcTime)
 	// g.procTimeStats.AddSample(procTime.Nanoseconds())
-	msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, g.msgGSerdeG.GetKeySerdeG(), g.msgGSerdeG.GetValSerdeG())
+	msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, g.msgGSerdeG)
 	if err != nil {
 		return nil, err
 	}
