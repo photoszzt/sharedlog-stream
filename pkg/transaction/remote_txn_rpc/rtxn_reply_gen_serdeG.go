@@ -45,10 +45,11 @@ func (s RTxnReplyJSONSerdeG) Decode(value []byte) (*RTxnReply, error) {
 }
 
 func (s RTxnReplyMsgpSerdeG) Encode(value *RTxnReply) ([]byte, *[]byte, error) {
-	b := commtypes.PopBuffer(value.Msgsize())
-	buf := *b
-	r, err := value.MarshalMsg(buf[:0])
-	return r, b, err
+	// b := commtypes.PopBuffer(value.Msgsize())
+	// buf := *b
+	// r, err := value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(nil)
+	return r, nil, err
 }
 
 func (s RTxnReplyMsgpSerdeG) Decode(value []byte) (*RTxnReply, error) {

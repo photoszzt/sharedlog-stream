@@ -45,10 +45,11 @@ func (s ControlMetadataJSONSerdeG) Decode(value []byte) (ControlMetadata, error)
 }
 
 func (s ControlMetadataMsgpSerdeG) Encode(value ControlMetadata) ([]byte, *[]byte, error) {
-	b := commtypes.PopBuffer(value.Msgsize())
-	buf := *b
-	r, err := value.MarshalMsg(buf[:0])
-	return r, b, err
+	// b := commtypes.PopBuffer(value.Msgsize())
+	// buf := *b
+	// r, err := value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(nil)
+	return r, nil, err
 }
 
 func (s ControlMetadataMsgpSerdeG) Decode(value []byte) (ControlMetadata, error) {

@@ -55,10 +55,11 @@ func (s RTxnReplyMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 		vTmp := value.(RTxnReply)
 		v = &vTmp
 	}
-	b := commtypes.PopBuffer(v.Msgsize())
-	buf := *b
-	r, err := v.MarshalMsg(buf[:0])
-	return r, b, err
+	// b := commtypes.PopBuffer(v.Msgsize())
+	// buf := *b
+	// r, err := v.MarshalMsg(buf[:0])
+	r, err := v.MarshalMsg(nil)
+	return r, nil, err
 }
 
 func (s RTxnReplyMsgpSerde) Decode(value []byte) (interface{}, error) {
