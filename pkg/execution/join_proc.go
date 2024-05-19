@@ -193,6 +193,7 @@ func procMsgWithSink[KIn, VIn, KOut, VOut any](ctx context.Context,
 	// 	return fmt.Errorf("fail to extract timestamp: %v", err)
 	// }
 	// msg.Timestamp = ts
+	_ = id
 
 	// debug.Fprintf(os.Stderr, "[id=%s] before runner\n", id)
 	msgs, err := procArgs.runner(ctx, msg)
