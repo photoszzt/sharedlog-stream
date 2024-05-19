@@ -46,6 +46,7 @@ func (s TableSnapshotsJSONSerdeG) Decode(value []byte) (TableSnapshots, error) {
 func (s TableSnapshotsMsgpSerdeG) Encode(value TableSnapshots) ([]byte, *[]byte, error) {
 	// b := PopBuffer(value.Msgsize())
 	// buf := *b
+	// r, err := value.MarshalMsg(buf[:0])
 	r, err := value.MarshalMsg(nil)
 	return r, nil, err
 }

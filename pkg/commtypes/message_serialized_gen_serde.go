@@ -54,10 +54,10 @@ func (s MessageSerializedMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, 
 		vTmp := value.(MessageSerialized)
 		v = &vTmp
 	}
-	// b := PopBuffer(v.Msgsize())
-	// buf := *b
-	r, err := v.MarshalMsg(nil)
-	return r, nil, err
+	b := PopBuffer(v.Msgsize())
+	buf := *b
+	r, err := v.MarshalMsg(buf[:0])
+	return r, b, err
 }
 
 func (s MessageSerializedMsgpSerde) Decode(value []byte) (interface{}, error) {

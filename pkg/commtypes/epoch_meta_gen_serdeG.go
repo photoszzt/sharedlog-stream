@@ -44,10 +44,11 @@ func (s EpochMarkerJSONSerdeG) Decode(value []byte) (EpochMarker, error) {
 }
 
 func (s EpochMarkerMsgpSerdeG) Encode(value EpochMarker) ([]byte, *[]byte, error) {
-	b := PopBuffer(value.Msgsize())
-	buf := *b
-	r, err := value.MarshalMsg(buf[:0])
-	return r, b, err
+	// b := PopBuffer(value.Msgsize())
+	// buf := *b
+	// r, err := value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(nil)
+	return r, nil, err
 }
 
 func (s EpochMarkerMsgpSerdeG) Decode(value []byte) (EpochMarker, error) {

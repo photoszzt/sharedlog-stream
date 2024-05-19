@@ -44,10 +44,11 @@ func (s OffsetMarkerJSONSerdeG) Decode(value []byte) (OffsetMarker, error) {
 }
 
 func (s OffsetMarkerMsgpSerdeG) Encode(value OffsetMarker) ([]byte, *[]byte, error) {
-	b := PopBuffer(value.Msgsize())
-	buf := *b
-	r, err := value.MarshalMsg(buf[:0])
-	return r, b, err
+	// b := PopBuffer(value.Msgsize())
+	// buf := *b
+	// r, err := value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(nil)
+	return r, nil, err
 }
 
 func (s OffsetMarkerMsgpSerdeG) Decode(value []byte) (OffsetMarker, error) {

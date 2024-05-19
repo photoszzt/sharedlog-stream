@@ -45,10 +45,11 @@ func (s SumAndCountJSONSerdeG) Decode(value []byte) (SumAndCount, error) {
 }
 
 func (s SumAndCountMsgpSerdeG) Encode(value SumAndCount) ([]byte, *[]byte, error) {
-	b := commtypes.PopBuffer(value.Msgsize())
-	buf := *b
-	r, err := value.MarshalMsg(buf[:0])
-	return r, b, err
+	// b := commtypes.PopBuffer(value.Msgsize())
+	// buf := *b
+	// r, err := value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(nil)
+	return r, nil, err
 }
 
 func (s SumAndCountMsgpSerdeG) Decode(value []byte) (SumAndCount, error) {

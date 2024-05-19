@@ -45,10 +45,11 @@ func (s PriceTimeJSONSerdeG) Decode(value []byte) (PriceTime, error) {
 }
 
 func (s PriceTimeMsgpSerdeG) Encode(value PriceTime) ([]byte, *[]byte, error) {
-	b := commtypes.PopBuffer(value.Msgsize())
-	buf := *b
-	r, err := value.MarshalMsg(buf[:0])
-	return r, b, err
+	// b := commtypes.PopBuffer(value.Msgsize())
+	// buf := *b
+	// r, err := value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(nil)
+	return r, nil, err
 }
 
 func (s PriceTimeMsgpSerdeG) Decode(value []byte) (PriceTime, error) {

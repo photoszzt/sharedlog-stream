@@ -93,7 +93,7 @@ func (s KeyValuePairMsgpSerdeG[K, V]) String() string {
 
 func (s KeyValuePairMsgpSerdeG[K, V]) Encode(v *KeyValuePair[K, V]) ([]byte, *[]byte, error) {
 	kvser, kbuf, vbuf, err := KVPairToKVPairSer(v, s.keySerde, s.valSerde)
-	defer func() {
+	if err != nil {
 		if s.keySerde.UsedBufferPool() && kbuf != nil {
 			*kbuf = kvser.KeyEnc
 			PushBuffer(kbuf)
@@ -102,13 +102,19 @@ func (s KeyValuePairMsgpSerdeG[K, V]) Encode(v *KeyValuePair[K, V]) ([]byte, *[]
 			*vbuf = kvser.ValueEnc
 			PushBuffer(vbuf)
 		}
-	}()
-	if err != nil {
 		return nil, nil, err
 	}
 	// b := PopBuffer(kvser.Msgsize())
 	// buf := *b
 	r, err := kvser.MarshalMsg(nil)
+	if s.keySerde.UsedBufferPool() && kbuf != nil {
+		*kbuf = kvser.KeyEnc
+		PushBuffer(kbuf)
+	}
+	if s.valSerde.UsedBufferPool() && vbuf != nil {
+		*vbuf = kvser.ValueEnc
+		PushBuffer(vbuf)
+	}
 	return r, nil, err
 }
 
@@ -154,14 +160,14 @@ func (s KeyValuePairsJSONSerdeG[K, V]) Encode(v KeyValuePairs[K, V]) ([]byte, *[
 		payloadArr.Payloads = append(payloadArr.Payloads, enc)
 	}
 	r, b, err := s.payloadEnc.Encode(payloadArr)
-	useBuf := s.s.UsedBufferPool()
-	if useBuf {
-		buf := new([]byte)
-		for _, p := range payloadArr.Payloads {
-			*buf = p
-			PushBuffer(buf)
-		}
-	}
+	// useBuf := s.s.UsedBufferPool()
+	// if useBuf {
+	// 	buf := new([]byte)
+	// 	for _, p := range payloadArr.Payloads {
+	// 		*buf = p
+	// 		PushBuffer(buf)
+	// 	}
+	// }
 	return r, b, err
 }
 
@@ -205,13 +211,13 @@ func EncodeKVPairs[K, V any](kvs KeyValuePairs[K, V], payloadSerde SerdeG[Payloa
 		payloadArr.Payloads = append(payloadArr.Payloads, enc)
 	}
 	r, b, err := payloadSerde.Encode(payloadArr)
-	if kvSerde.UsedBufferPool() {
-		buf := new([]byte)
-		for _, p := range payloadArr.Payloads {
-			*buf = p
-			PushBuffer(buf)
-		}
-	}
+	// if kvSerde.UsedBufferPool() {
+	// 	buf := new([]byte)
+	// 	for _, p := range payloadArr.Payloads {
+	// 		*buf = p
+	// 		PushBuffer(buf)
+	// 	}
+	// }
 	return r, b, err
 }
 
@@ -227,13 +233,13 @@ func (s KeyValuePairsMsgpSerdeG[K, V]) Encode(v KeyValuePairs[K, V]) ([]byte, *[
 		payloadArr.Payloads = append(payloadArr.Payloads, enc)
 	}
 	r, b, err := s.payloadEnc.Encode(payloadArr)
-	if s.s.UsedBufferPool() {
-		buf := new([]byte)
-		for _, p := range payloadArr.Payloads {
-			*buf = p
-			PushBuffer(buf)
-		}
-	}
+	// if s.s.UsedBufferPool() {
+	// 	buf := new([]byte)
+	// 	for _, p := range payloadArr.Payloads {
+	// 		*buf = p
+	// 		PushBuffer(buf)
+	// 	}
+	// }
 	return r, b, err
 }
 

@@ -45,10 +45,11 @@ func (s BidPriceJSONSerdeG) Decode(value []byte) (BidPrice, error) {
 }
 
 func (s BidPriceMsgpSerdeG) Encode(value BidPrice) ([]byte, *[]byte, error) {
-	b := commtypes.PopBuffer(value.Msgsize())
-	buf := *b
-	r, err := value.MarshalMsg(buf[:0])
-	return r, b, err
+	// b := commtypes.PopBuffer(value.Msgsize())
+	// buf := *b
+	// r, err := value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(nil)
+	return r, nil, err
 }
 
 func (s BidPriceMsgpSerdeG) Decode(value []byte) (BidPrice, error) {

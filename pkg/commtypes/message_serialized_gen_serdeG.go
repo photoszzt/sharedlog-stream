@@ -46,6 +46,7 @@ func (s MessageSerializedJSONSerdeG) Decode(value []byte) (MessageSerialized, er
 func (s MessageSerializedMsgpSerdeG) Encode(value MessageSerialized) ([]byte, *[]byte, error) {
 	// b := PopBuffer(value.Msgsize())
 	// buf := *b
+	// r, err := value.MarshalMsg(buf[:0])
 	r, err := value.MarshalMsg(nil)
 	return r, nil, err
 }

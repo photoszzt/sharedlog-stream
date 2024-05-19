@@ -45,10 +45,11 @@ func (s PersonTimeJSONSerdeG) Decode(value []byte) (PersonTime, error) {
 }
 
 func (s PersonTimeMsgpSerdeG) Encode(value PersonTime) ([]byte, *[]byte, error) {
-	b := commtypes.PopBuffer(value.Msgsize())
-	buf := *b
-	r, err := value.MarshalMsg(buf[:0])
-	return r, b, err
+	// b := commtypes.PopBuffer(value.Msgsize())
+	// buf := *b
+	// r, err := value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(nil)
+	return r, nil, err
 }
 
 func (s PersonTimeMsgpSerdeG) Decode(value []byte) (PersonTime, error) {

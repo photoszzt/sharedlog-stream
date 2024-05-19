@@ -77,11 +77,11 @@ func (s ChangeMsgpSerdeG) Encode(value Change) ([]byte, *[]byte, error) {
 	c, newBuf, oldBuf, err := changeToChangeSer(value, s.ValMsgpSerde)
 	defer func() {
 		if s.ValMsgpSerde.UsedBufferPool() && c != nil {
-			if c.NewValSerialized != nil && c != nil {
+			if newBuf != nil {
 				*newBuf = c.NewValSerialized
 				PushBuffer(newBuf)
 			}
-			if c.OldValSerialized != nil {
+			if oldBuf != nil {
 				*oldBuf = c.OldValSerialized
 				PushBuffer(oldBuf)
 			}
@@ -90,10 +90,11 @@ func (s ChangeMsgpSerdeG) Encode(value Change) ([]byte, *[]byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	b := PopBuffer(c.Msgsize())
-	buf := *b
-	r, err := c.MarshalMsg(buf[:0])
-	return r, b, err
+	// b := PopBuffer(c.Msgsize())
+	// buf := *b
+	// r, err := c.MarshalMsg(buf[:0])
+	r, err := c.MarshalMsg(nil)
+	return r, nil, err
 }
 
 func (s ChangeMsgpSerdeG) Decode(value []byte) (Change, error) {

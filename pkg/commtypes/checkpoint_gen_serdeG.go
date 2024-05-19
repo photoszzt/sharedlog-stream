@@ -46,6 +46,7 @@ func (s CheckpointJSONSerdeG) Decode(value []byte) (Checkpoint, error) {
 func (s CheckpointMsgpSerdeG) Encode(value Checkpoint) ([]byte, *[]byte, error) {
 	// b := PopBuffer(value.Msgsize())
 	// buf := *b
+	// r, err := value.MarshalMsg(buf[:0])
 	r, err := value.MarshalMsg(nil)
 	return r, nil, err
 }

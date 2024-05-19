@@ -19,7 +19,6 @@ func TestSerdeEpochMarker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("generated struct: %v", v)
 	GenTestEncodeDecode[EpochMarker](v, t, jsonSerdeG, jsonSerde)
 	GenTestEncodeDecode[EpochMarker](v, t, msgSerdeG, msgSerde)
 }

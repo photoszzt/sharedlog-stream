@@ -160,12 +160,12 @@ func (s ChangeMsgpSerde) String() string {
 func (s ChangeMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	c, newBuf, oldBuf, err := convertToChangeSer(value, s.ValMsgpSerde)
 	defer func() {
-		if s.ValMsgpSerde.UsedBufferPool() {
-			if c.NewValSerialized != nil && newBuf != nil {
+		if s.ValMsgpSerde.UsedBufferPool() && c != nil {
+			if newBuf != nil {
 				*newBuf = c.NewValSerialized
 				PushBuffer(newBuf)
 			}
-			if c.OldValSerialized != nil {
+			if oldBuf != nil {
 				*oldBuf = c.OldValSerialized
 				PushBuffer(oldBuf)
 			}
@@ -174,10 +174,11 @@ func (s ChangeMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	b := PopBuffer(c.Msgsize())
-	buf := *b
-	r, err := c.MarshalMsg(buf[:0])
-	return r, b, err
+	// b := PopBuffer(c.Msgsize())
+	// buf := *b
+	// r, err := c.MarshalMsg(buf[:0])
+	r, err := c.MarshalMsg(nil)
+	return r, nil, err
 }
 
 func (s ChangeMsgpSerde) Decode(value []byte) (interface{}, error) {

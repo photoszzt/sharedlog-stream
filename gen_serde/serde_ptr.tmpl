@@ -51,10 +51,11 @@ func (s {{.TypeName}}MsgpSerde) Encode(value interface{}) ([]byte, *[]byte, erro
 		vTmp := value.({{.TypeName}})
 		v = &vTmp
 	}
-	b := {{.CommtypesPrefix}}PopBuffer(v.Msgsize())
-	buf := *b
-	r, err := v.MarshalMsg(buf[:0])
-	return r, b, err
+	// b := {{.CommtypesPrefix}}PopBuffer(v.Msgsize())
+	// buf := *b
+	// r, err := v.MarshalMsg(buf[:0])
+	r, err := v.MarshalMsg(nil)
+	return r, nil, err
 }
 
 func (s {{.TypeName}}MsgpSerde) Decode(value []byte) (interface{}, error) {

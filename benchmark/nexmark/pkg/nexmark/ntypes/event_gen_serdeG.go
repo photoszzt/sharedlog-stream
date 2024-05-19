@@ -45,10 +45,11 @@ func (s EventJSONSerdeG) Decode(value []byte) (*Event, error) {
 }
 
 func (s EventMsgpSerdeG) Encode(value *Event) ([]byte, *[]byte, error) {
-	b := commtypes.PopBuffer(value.Msgsize())
-	buf := *b
-	r, err := value.MarshalMsg(buf[:0])
-	return r, b, err
+	// b := commtypes.PopBuffer(value.Msgsize())
+	// buf := *b
+	// r, err := value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(nil)
+	return r, nil, err
 }
 
 func (s EventMsgpSerdeG) Decode(value []byte) (*Event, error) {
