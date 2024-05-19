@@ -43,7 +43,7 @@ nexmark_stats:
 .PHONY: nexmark_debug
 nexmark_debug:
 	mkdir -p ./bin
-	GO111MODULE=on go build -tags "debug,stats" -o bin/nexmark_handler_debug ./benchmark/nexmark/nexmark_handler
+	GO111MODULE=on go build -race -tags "debug,stats" -o bin/nexmark_handler_debug ./benchmark/nexmark/nexmark_handler
 
 .PHONY: nexmark_client
 nexmark_client:
@@ -58,7 +58,7 @@ remote_txn_mngr_grpc:
 .PHONY: remote_txn_mngr_grpc_debug
 remote_txn_mngr_grpc_debug:
 	mkdir -p ./bin
-	GO111MODULE=on go build -tags "debug" -o bin/remote_txn_mngr_grpc_debug ./remote_txn_manager/grpc
+	GO111MODULE=on go build -race -tags "debug" -o bin/remote_txn_mngr_grpc_debug ./remote_txn_manager/grpc
 
 .PHONY: remote_txn_mngr_boki
 remote_txn_mngr_boki:
