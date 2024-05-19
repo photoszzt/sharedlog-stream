@@ -106,10 +106,10 @@ func (s KeyValuePairMsgpSerdeG[K, V]) Encode(v *KeyValuePair[K, V]) ([]byte, *[]
 	if err != nil {
 		return nil, nil, err
 	}
-	b := PopBuffer(kvser.Msgsize())
-	buf := *b
-	r, err := kvser.MarshalMsg(buf[:0])
-	return r, b, err
+	// b := PopBuffer(kvser.Msgsize())
+	// buf := *b
+	r, err := kvser.MarshalMsg(nil)
+	return r, nil, err
 }
 
 func (s KeyValuePairMsgpSerdeG[K, V]) Decode(v []byte) (*KeyValuePair[K, V], error) {

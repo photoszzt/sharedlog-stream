@@ -131,10 +131,10 @@ func main() {
 	gen_serde_ptr_test("auction_bid", "AuctionBid", ntypes_path, "ntypes", false)
 
 	commtypes_path := "../pkg/commtypes/"
-	gen_serde("checkpoint", "Checkpoint", commtypes_path, "commtypes", true)
+	// gen_serde("checkpoint", "Checkpoint", commtypes_path, "commtypes", true)
 	gen_serde("epoch_meta", "EpochMarker", commtypes_path, "commtypes", true)
-	gen_serde("payload_arr", "PayloadArr", commtypes_path, "commtypes", true)
-	gen_serde("table_snapshots", "TableSnapshots", commtypes_path, "commtypes", true)
+	// gen_serde("payload_arr", "PayloadArr", commtypes_path, "commtypes", true)
+	// gen_serde("table_snapshots", "TableSnapshots", commtypes_path, "commtypes", true)
 	gen_serde("offset_marker", "OffsetMarker", commtypes_path, "commtypes", true)
 	// gen_serde("message_serialized", "MessageSerialized", commtypes_path, "commtypes", true)
 	gen_serde("time_window", "TimeWindow", commtypes_path, "commtypes", true)

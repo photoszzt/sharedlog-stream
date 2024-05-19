@@ -54,10 +54,10 @@ func (s TableSnapshotsMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, err
 		vTmp := value.(TableSnapshots)
 		v = &vTmp
 	}
-	b := PopBuffer(v.Msgsize())
-	buf := *b
-	r, err := v.MarshalMsg(buf[:0])
-	return r, b, err
+	// b := PopBuffer(v.Msgsize())
+	// buf := *b
+	r, err := v.MarshalMsg(nil)
+	return r, nil, err
 }
 
 func (s TableSnapshotsMsgpSerde) Decode(value []byte) (interface{}, error) {
