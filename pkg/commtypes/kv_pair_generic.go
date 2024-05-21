@@ -46,7 +46,7 @@ func KVPairSerToKVPairG[K, V any](value KeyValueSerrialized, keySerde SerdeG[K],
 type KeyValuePairJSONSerdeG[K, V any] struct {
 	keySerde SerdeG[K]
 	valSerde SerdeG[V]
-	DefaultMsgpSerde
+	DefaultJSONSerde
 }
 
 func (s KeyValuePairJSONSerdeG[K, V]) String() string {
@@ -86,6 +86,8 @@ type KeyValuePairMsgpSerdeG[K, V any] struct {
 	keySerde SerdeG[K]
 	valSerde SerdeG[V]
 }
+
+func (s KeyValuePairMsgpSerdeG[K, V]) UsedBufferPool() bool { return false }
 
 func (s KeyValuePairMsgpSerdeG[K, V]) String() string {
 	return fmt.Sprintf("KeyValuePairMsgpSerdeG{key: %s, val: %s}", s.keySerde.String(), s.valSerde.String())

@@ -39,6 +39,7 @@ func (h *ChkptManagerHandler) Call(ctx context.Context, input []byte) ([]byte, e
 	}
 	h.rcm = checkpt.NewRedisChkptManager()
 	PrintChkptMngrInput(parsedInput)
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.Chkpt(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -78,7 +79,7 @@ func (h *ChkptManagerHandler) genChkpt(ctx context.Context, input *common.ChkptM
 		if err != nil {
 			return err
 		}
-		if useBuf {
+		if useBuf && b != nil {
 			*b = encoded
 			commtypes.PushBuffer(b)
 		}

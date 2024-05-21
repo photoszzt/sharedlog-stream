@@ -33,14 +33,14 @@ var _ = SnapshotStore(&RedisSnapshotStore{})
 
 type RedisSnapshotStore struct {
 	rdb_arr  []*redis.Client
-	snapSize stats.StatsCollector[int]
+	snapSize *stats.ConcurrentStatsCollector[int]
 }
 
 func NewRedisSnapshotStore(createSnapshot bool) RedisSnapshotStore {
 	if createSnapshot {
 		return RedisSnapshotStore{
 			rdb_arr:  redis_client.GetRedisClients(),
-			snapSize: stats.NewStatsCollector[int]("redisStore", stats.DEFAULT_COLLECT_DURATION),
+			snapSize: stats.NewConcurrentStatsCollector[int]("redisStore", stats.DEFAULT_COLLECT_DURATION),
 		}
 	} else {
 		return RedisSnapshotStore{}

@@ -108,13 +108,13 @@ func SetWinStoreChkpt[K, V any](
 				*buf = out
 				commtypes.PushBuffer(buf)
 			}
-			if kvPairSerdeG.UsedBufferPool() {
-				buf2 := new([]byte)
-				for _, p := range outBin {
-					*buf2 = p
-					commtypes.PushBuffer(buf)
-				}
-			}
+			// if kvPairSerdeG.UsedBufferPool() {
+			// 	buf2 := new([]byte)
+			// 	for _, p := range outBin {
+			// 		*buf2 = p
+			// 		commtypes.PushBuffer(buf2)
+			// 	}
+			// }
 			return err
 		})
 }
