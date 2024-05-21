@@ -61,7 +61,7 @@ func (mc *MinioChkptStore) CreateWorkloadBucket(ctx context.Context) error {
 	return nil
 }
 
-func (mc *MinioChkptStore) StoreSrcLogoff(ctx context.Context, srcLogOff []commtypes.TpLogOff) error {
+func (mc *MinioChkptStore) StoreSrcLogoff(ctx context.Context, srcLogOff []commtypes.TpLogOff, instanceId uint8) error {
 	bg, ctx := errgroup.WithContext(ctx)
 	for _, tpLogOff := range srcLogOff {
 		idx := hashfuncs.NameHash(tpLogOff.Tp) % uint64(len(mc.minioClients))
@@ -81,7 +81,7 @@ func (mc *MinioChkptStore) StoreSrcLogoff(ctx context.Context, srcLogOff []commt
 }
 
 func (mc *MinioChkptStore) StoreAlignChkpt(ctx context.Context, snapshot []byte,
-	srcLogOff []commtypes.TpLogOff, storeName string,
+	srcLogOff []commtypes.TpLogOff, storeName string, instanceId uint8,
 ) error {
 	var keys []string
 	bg, ctx := errgroup.WithContext(ctx)
@@ -91,7 +91,7 @@ func (mc *MinioChkptStore) StoreAlignChkpt(ctx context.Context, snapshot []byte,
 	}
 	keys = append(keys, storeName)
 	key := strings.Join(keys, "-")
-	idx := hashfuncs.NameHash(key) % l
+	idx := uint64(instanceId) % l
 	debug.Fprintf(os.Stderr, "store snapshot key: %s at minio[%d]\n", key, idx)
 	_, err := mc.minioClients[idx].PutObject(ctx, CHKPT_BUCKET_NAME, key, bytes.NewReader(snapshot),
 		int64(len(snapshot)), minio.PutObjectOptions{})
@@ -99,7 +99,6 @@ func (mc *MinioChkptStore) StoreAlignChkpt(ctx context.Context, snapshot []byte,
 		return err
 	}
 	for _, tpLogOff := range srcLogOff {
-		idx := hashfuncs.NameHash(tpLogOff.Tp) % l
 		logOff := tpLogOff.LogOff
 		tp := tpLogOff.Tp
 		bg.Go(func() error {
@@ -113,11 +112,11 @@ func (mc *MinioChkptStore) StoreAlignChkpt(ctx context.Context, snapshot []byte,
 	return bg.Wait()
 }
 
-func (mc *MinioChkptStore) GetAlignChkpt(ctx context.Context, srcs []string, storeName string) ([]byte, error) {
+func (mc *MinioChkptStore) GetAlignChkpt(ctx context.Context, srcs []string, storeName string, instanceId uint8) ([]byte, error) {
 	var keys []string
 	l := uint64(len(mc.minioClients))
+	idx := uint64(instanceId) % l
 	for _, tp := range srcs {
-		idx := hashfuncs.NameHash(tp) % l
 		object, err := mc.minioClients[idx].GetObject(ctx, CHKPT_BUCKET_NAME, tp, minio.GetObjectOptions{})
 		if err != nil {
 			return nil, err
@@ -132,7 +131,6 @@ func (mc *MinioChkptStore) GetAlignChkpt(ctx context.Context, srcs []string, sto
 	}
 	keys = append(keys, storeName)
 	key := strings.Join(keys, "-")
-	idx := hashfuncs.NameHash(key) % l
 	debug.Fprintf(os.Stderr, "get snapshot key: %s at minio[%d]\n", key, idx)
 	obj, err := mc.minioClients[idx].GetObject(ctx, CHKPT_BUCKET_NAME, key, minio.GetObjectOptions{})
 	if err != nil {
@@ -143,14 +141,14 @@ func (mc *MinioChkptStore) GetAlignChkpt(ctx context.Context, srcs []string, sto
 }
 
 func (mc *MinioChkptStore) StoreSnapshot(ctx context.Context,
-	snapshot []byte, changelogTpName string, logOff uint64,
+	snapshot []byte, changelogTpName string, logOff uint64, instanceId uint8,
 ) error {
 	var uint16Serde commtypes.Uint16Serde
 	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
 	debug.Assert(env != nil, "env should be set")
 	key := fmt.Sprintf("%s_%#x", changelogTpName, logOff)
 	l := uint64(len(mc.minioClients))
-	idx := hashfuncs.NameHash(key) % l
+	idx := uint64(instanceId) % l
 	fmt.Fprintf(os.Stderr, "store snapshot key: %s at minio[%d]\n", key, idx)
 	_, err := mc.minioClients[idx].PutObject(ctx, CHKPT_BUCKET_NAME, key, bytes.NewReader(snapshot),
 		int64(len(snapshot)), minio.PutObjectOptions{})
@@ -165,9 +163,9 @@ func (mc *MinioChkptStore) StoreSnapshot(ctx context.Context,
 	return env.SharedLogSetAuxData(ctx, logOff, enc)
 }
 
-func (mc *MinioChkptStore) GetSnapshot(ctx context.Context, changelogTpName string, logOff uint64) ([]byte, error) {
+func (mc *MinioChkptStore) GetSnapshot(ctx context.Context, changelogTpName string, logOff uint64, instanceId uint8) ([]byte, error) {
 	key := fmt.Sprintf("%s_%#x", changelogTpName, logOff)
-	idx := hashfuncs.NameHash(key) % uint64(len(mc.minioClients))
+	idx := uint64(instanceId) % uint64(len(mc.minioClients))
 	fmt.Fprintf(os.Stderr, "get snapshot key: %s at minio[%d]\n", key, idx)
 	object, err := mc.minioClients[idx].GetObject(ctx, CHKPT_BUCKET_NAME, key, minio.GetObjectOptions{})
 	if err != nil {

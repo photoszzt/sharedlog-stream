@@ -57,18 +57,18 @@ func SetKVStoreChkpt[K, V any](
 				return err
 			}
 			// fmt.Fprintf(os.Stderr, "kv snapshot size: %d, store snapshot at %x\n", len(out), tpLogoff[0].LogOff)
-			err = mc.StoreAlignChkpt(ctx, out, tpLogoff, kvstore.Name())
+			err = mc.StoreAlignChkpt(ctx, out, tpLogoff, kvstore.Name(), kvstore.GetInstanceId())
 			if chkptSerde.UsedBufferPool() && buf != nil {
 				*buf = out
 				commtypes.PushBuffer(buf)
 			}
-			if kvPairSerdeG.UsedBufferPool() {
-				buf2 := new([]byte)
-				for _, p := range outBin {
-					*buf2 = p
-					commtypes.PushBuffer(buf)
-				}
-			}
+			// if kvPairSerdeG.UsedBufferPool() {
+			// 	buf2 := new([]byte)
+			// 	for _, p := range outBin {
+			// 		*buf2 = p
+			// 		commtypes.PushBuffer(buf)
+			// 	}
+			// }
 			return err
 		})
 }
@@ -103,7 +103,7 @@ func SetWinStoreChkpt[K, V any](
 				return err
 			}
 			// fmt.Fprintf(os.Stderr, "win snapshot size: %d, store snapshot at %x\n", len(out), tpLogOff[0].LogOff)
-			err = mc.StoreAlignChkpt(ctx, out, tpLogOff, winStore.Name())
+			err = mc.StoreAlignChkpt(ctx, out, tpLogOff, winStore.Name(), winStore.GetInstanceId())
 			if chkptSerde.UsedBufferPool() && buf != nil {
 				*buf = out
 				commtypes.PushBuffer(buf)

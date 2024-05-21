@@ -559,7 +559,7 @@ func createChkpt(ctx context.Context, args *StreamTaskArgs, tplogOff []commtypes
 ) error {
 	// no stores
 	if len(args.kvs) == 0 && len(args.wscs) == 0 {
-		return mc.StoreSrcLogoff(ctx, tplogOff)
+		return mc.StoreSrcLogoff(ctx, tplogOff, args.ectx.SubstreamNum())
 	}
 	for _, kv := range args.kvs {
 		kv.Snapshot(ctx, tplogOff, chkptMeta, true)
@@ -926,7 +926,7 @@ func loadSnapshot(ctx context.Context,
 			}
 			for kvchTp, kvchangelog := range args.kvChangelogs {
 				tp := fmt.Sprintf("%s-%d", kvchTp, args.ectx.SubstreamNum())
-				snapArr, err := rs.GetSnapshot(ctx, tp, auxMetaSeq)
+				snapArr, err := rs.GetSnapshot(ctx, tp, auxMetaSeq, kvchangelog.GetInstanceId())
 				if err != nil {
 					return fmt.Errorf("[ERR] RedisGetSnapshot: tp=%s, seq=%#x, err=%v", kvchTp, auxMetaSeq, err)
 				}
@@ -944,7 +944,7 @@ func loadSnapshot(ctx context.Context,
 			}
 			for wscTp, wsc := range args.windowStoreChangelogs {
 				tp := fmt.Sprintf("%s-%d", wscTp, args.ectx.SubstreamNum())
-				snapArr, err := rs.GetSnapshot(ctx, tp, auxMetaSeq)
+				snapArr, err := rs.GetSnapshot(ctx, tp, auxMetaSeq, wsc.GetInstanceId())
 				if err != nil {
 					return fmt.Errorf("[ERR] RedisGetSnapshot: tp=%s, seq=%#x, err=%v", wscTp, auxMetaSeq, err)
 				}

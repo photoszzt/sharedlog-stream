@@ -44,7 +44,7 @@ func SetKVStoreWithChangelogSnapshot[K, V any](
 			}
 			fmt.Fprintf(os.Stderr, "kv snapshot size: %d, store snapshot at %x\n", len(out), tpLogoff[0].LogOff)
 			tp := fmt.Sprintf("%s-%d", kvstore.ChangelogTopicName(), kvstore.SubstreamNum())
-			return rs.StoreSnapshot(ctx, out, tp, tpLogoff[0].LogOff)
+			return rs.StoreSnapshot(ctx, out, tp, tpLogoff[0].LogOff, kvstore.GetInstanceId())
 		})
 }
 
@@ -71,7 +71,7 @@ func SetWinStoreWithChangelogSnapshot[K, V any](
 			}
 			fmt.Fprintf(os.Stderr, "win snapshot size: %d, store snapshot at %x\n", len(out), tpLogOff[0].LogOff)
 			tp := fmt.Sprintf("%s-%d", winStore.ChangelogTopicName(), winStore.SubstreamNum())
-			return rs.StoreSnapshot(ctx, out, tp, tpLogOff[0].LogOff)
+			return rs.StoreSnapshot(ctx, out, tp, tpLogOff[0].LogOff, winStore.GetInstanceId())
 		})
 }
 

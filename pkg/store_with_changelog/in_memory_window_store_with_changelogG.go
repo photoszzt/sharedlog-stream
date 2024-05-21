@@ -356,5 +356,6 @@ func CreateInMemSkipMapWindowTableWithChangelogG[K, V any](
 ) (*InMemoryWindowStoreWithChangelogG[K, V], error) {
 	winTab := store.NewInMemorySkipMapWindowStore[K, V](mp.storeName,
 		joinWindow.MaxSize()+joinWindow.GracePeriodMs(), joinWindow.MaxSize(), retainDuplicates, cmpFunc)
+	winTab.SetInstanceId(mp.parNum)
 	return NewInMemoryWindowStoreWithChangelogG[K, V](winTab, mp)
 }

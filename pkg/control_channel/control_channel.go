@@ -100,14 +100,14 @@ type restoreWork struct {
 func (cmm *ControlChannelManager) loadAndDecodeSnapshot(
 	ctx context.Context, topic string,
 	rs *snapshot_store.RedisSnapshotStore,
-	auxData []byte, metaSeqNum uint64,
+	auxData []byte, metaSeqNum uint64, instanceId uint8,
 ) ([][]byte, error) {
 	ret, err := cmm.uint16SerdeG.Decode(auxData)
 	if err != nil {
 		return nil, fmt.Errorf("[ERR] Decode: %v", err)
 	}
 	if ret == 1 {
-		snapArr, err := rs.GetSnapshot(ctx, topic, metaSeqNum)
+		snapArr, err := rs.GetSnapshot(ctx, topic, metaSeqNum, instanceId)
 		if err != nil {
 			return nil, fmt.Errorf("[ERR] RedisGetSnapshot: topic=%s, seq=%#x, err=%v",
 				topic, metaSeqNum, err)
@@ -139,7 +139,7 @@ func (cmm *ControlChannelManager) loadSnapshotToKV(
 	if auxData == nil {
 		return nil
 	}
-	payloads, err := cmm.loadAndDecodeSnapshot(ctx, work.topic, rs, auxData, metaSeqNum)
+	payloads, err := cmm.loadAndDecodeSnapshot(ctx, work.topic, rs, auxData, metaSeqNum, kvc.GetInstanceId())
 	if err != nil {
 		return err
 	}
@@ -167,7 +167,7 @@ func (cmm *ControlChannelManager) loadSnapshotToWinStore(
 	if auxData == nil {
 		return nil
 	}
-	payloads, err := cmm.loadAndDecodeSnapshot(ctx, work.topic, rs, auxData, metaSeqNum)
+	payloads, err := cmm.loadAndDecodeSnapshot(ctx, work.topic, rs, auxData, metaSeqNum, wsc.GetInstanceId())
 	if err != nil {
 		return err
 	}

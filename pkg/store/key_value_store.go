@@ -52,6 +52,7 @@ type StoreWithFlush interface {
 
 type KeyValueStoreOp interface {
 	OnlyUpdateInMemStore
+	GetInstanceId() uint8
 	Flush(ctx context.Context) (uint32, error)
 	Snapshot(context.Context, []commtypes.TpLogOff, []commtypes.ChkptMetaData, bool)
 	WaitForAllSnapshot() error

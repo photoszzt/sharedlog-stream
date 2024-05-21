@@ -320,6 +320,7 @@ func ToInMemSkipmapKVTableWithChangelog[K, V any](mp *MaterializeParam[K, commty
 	*KeyValueStoreWithChangelogG[K, commtypes.ValueTimestampG[V]], error,
 ) {
 	s := store.NewInMemorySkipmapKeyValueStoreG[K, commtypes.ValueTimestampG[V]](mp.storeName, less)
+	s.SetInstanceId(mp.parNum)
 	storeWithlog, err := NewKeyValueStoreWithChangelogG[K, commtypes.ValueTimestampG[V]](mp, s)
 	if err != nil {
 		return nil, nil, err

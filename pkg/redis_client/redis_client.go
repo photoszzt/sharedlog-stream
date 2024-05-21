@@ -25,6 +25,7 @@ func GetRedisClients() []*redis.Client {
 			DB:              0,  // use default DB
 			MaxRetries:      10,
 			MaxRetryBackoff: time.Duration(4096) * time.Millisecond,
+			ReadTimeout:     time.Duration(5) * time.Second,
 		})
 	}
 	return rdb_arr
