@@ -33,6 +33,8 @@ type BufferedSinkStream struct {
 
 	flushBufferStats  stats.PrintLogStatsCollector[int64]
 	bufPushFlushStats stats.PrintLogStatsCollector[int64]
+	marshalPayload    stats.StatsCollector[int64]
+	flushPushLog      stats.StatsCollector[int64]
 	bufferEntryStats  stats.StatsCollector[int]
 	bufferSizeStats   stats.StatsCollector[int]
 
@@ -60,6 +62,8 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8, bufMaxSize uin
 			stats.DEFAULT_COLLECT_DURATION),
 		flushBufferStats:     stats.NewPrintLogStatsCollector[int64](fmt.Sprintf("%s_flushBuf_%v", stream.topicName, parNum)),
 		bufPushFlushStats:    stats.NewPrintLogStatsCollector[int64](fmt.Sprintf("%s_bufPushFlush_%v", stream.topicName, parNum)),
+		marshalPayload:       stats.NewStatsCollector[int64](fmt.Sprintf("%s_%d_marshalBufInFlush", stream.topicName, parNum), stats.DEFAULT_COLLECT_DURATION),
+		flushPushLog:         stats.NewStatsCollector[int64](fmt.Sprintf("%s_%d_flushPushLog", stream.topicName, parNum), stats.DEFAULT_COLLECT_DURATION),
 		sink_buffer_max_size: int(bufMaxSize),
 		lastMarkerSeq:        0,
 	}
@@ -72,6 +76,8 @@ func (s *BufferedSinkStream) OutputRemainingStats() {
 	s.bufferSizeStats.PrintRemainingStats()
 	s.flushBufferStats.PrintRemainingStats()
 	s.bufPushFlushStats.PrintRemainingStats()
+	s.marshalPayload.PrintRemainingStats()
+	s.flushPushLog.PrintRemainingStats()
 }
 
 func (s *BufferedSinkStream) SetLastMarkerSeq(seq uint64) {
@@ -314,6 +320,8 @@ func (s *BufferedSinkStream) flushGoroutineSafe(ctx context.Context,
 		}
 		return 0, err
 	}
+	marshalElp := time.Since(tBeg).Microseconds()
+	pBeg := time.Now()
 	tags := []uint64{NameHashWithPartition(s.Stream.topicNameHash, s.parNum)}
 	seqNum, err := s.Stream.PushWithTag(ctx, payloads, s.parNum,
 		tags, nil, ArrRecordMeta, producerId)
@@ -323,6 +331,7 @@ func (s *BufferedSinkStream) flushGoroutineSafe(ctx context.Context,
 		}
 		return 0, err
 	}
+	pushElapsed := time.Since(pBeg).Microseconds()
 	if s.payloadArrSerde.UsedBufferPool() && b != nil {
 		*b = payloads
 		commtypes.PushBuffer(b)
@@ -349,6 +358,8 @@ func (s *BufferedSinkStream) flushGoroutineSafe(ctx context.Context,
 		"sink buffer should be empty after flush")
 	flushElapsed := time.Since(tBeg).Microseconds()
 	s.flushBufferStats.AddSample(flushElapsed)
+	s.marshalPayload.AddSample(marshalElp)
+	s.flushPushLog.AddSample(pushElapsed)
 	// debug.Fprintf(os.Stderr, "[id=%s] %s(%d) done flush\n", id, s.Stream.topicName, s.parNum)
 	if lock {
 		s.mux.Unlock()
