@@ -16,14 +16,14 @@ const (
 	END_OF_STREAM_KEY = "__end_stream"
 )
 
-var bytesPool = NewSharedBufferPool()
-
 func PopBuffer(size int) *[]byte {
-	return bytesPool.Get(size)
+	// return bytesPool.Get(size)
+	return getBuf(size)
 }
 
 func PushBuffer(b *[]byte) {
-	bytesPool.Put(b)
+	// bytesPool.Put(b)
+	putBuf(b)
 }
 
 type Punctuate struct{}
