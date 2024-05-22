@@ -59,6 +59,10 @@ func (tm *RemoteTxnManagerClient) UpdateProducerId(prodId *commtypes.ProdId) {
 	tm.prodId.TaskEpoch = prodId.TaskEpoch
 }
 
+func (tm *RemoteTxnManagerClient) OutputRemainingStates() {
+	tm.waitAndappendTxnMeta.PrintRemainingStats()
+}
+
 func (tc *RemoteTxnManagerClient) collectTopicSubstreams() []*txn_data.TopicPartition {
 	topicSubstreams := make([]*txn_data.TopicPartition, 0, tc.currentTopicSubstream.Len())
 	tc.currentTopicSubstream.Range(func(tp string, parSet *skipset.Uint32Set) bool {
