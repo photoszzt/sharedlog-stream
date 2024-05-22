@@ -59,7 +59,7 @@ func (tm *RemoteTxnManagerClient) UpdateProducerId(prodId *commtypes.ProdId) {
 	tm.prodId.TaskEpoch = prodId.TaskEpoch
 }
 
-func (tm *RemoteTxnManagerClient) OutputRemainingStates() {
+func (tm *RemoteTxnManagerClient) OutputRemainingStats() {
 	tm.waitAndappendTxnMeta.PrintRemainingStats()
 }
 

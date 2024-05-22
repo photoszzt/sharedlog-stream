@@ -266,7 +266,7 @@ func processWithRTxnMngr(
 				return err_out
 			}
 			meta.t.PrintRemainingStats()
-			// meta.tm.OutputRemainingStats()
+			meta.rtm_client.OutputRemainingStats()
 			fmt.Fprintf(os.Stderr, "finish final commit\n")
 			return handleCtrlMsg(ctx, ctrlRawMsgArr, meta.t, meta.args, &warmupCheck, nil)
 		}
