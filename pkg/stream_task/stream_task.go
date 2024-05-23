@@ -558,8 +558,12 @@ func createChkpt(ctx context.Context, args *StreamTaskArgs, tplogOff []commtypes
 	mc *snapshot_store.RedisSnapshotStore,
 ) error {
 	// no stores
-	if len(args.kvs) == 0 && len(args.wscs) == 0 && !args.ectx.AllConsumersIsInit() {
-		return mc.StoreSrcLogoff(ctx, tplogOff, args.ectx.SubstreamNum())
+	if len(args.kvs) == 0 && len(args.wscs) == 0 {
+		if !args.ectx.AllConsumersIsInit() {
+			return mc.StoreSrcLogoff(ctx, tplogOff, args.ectx.SubstreamNum())
+		} else {
+			return nil
+		}
 	}
 	for _, kv := range args.kvs {
 		kv.Snapshot(ctx, tplogOff, chkptMeta, true)
