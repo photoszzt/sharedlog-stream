@@ -69,7 +69,19 @@ func prepareInit(rtm_client exactly_once_intr.ReadOnlyExactlyOnceManager, args *
 
 func prepareGrpc(instance uint8) (*grpc.ClientConn, error) {
 	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	retryPolicy := `{
+		"methodConfig": [{
+		  "name": [{"service": "remote_txn_rpc.RemoteTxnMngr"}],
+		  "waitForReady": true,
+		  "retryPolicy": {
+			  "MaxAttempts": 4,
+			  "InitialBackoff": ".002s",
+			  "MaxBackoff": ".01s",
+			  "BackoffMultiplier": 2.0,
+			  "RetryableStatusCodes": [ "UNAVAILABLE" ]
+		  }
+		}]}`
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(retryPolicy))
 	rmngr_addr := GetRemoteTxnMngrAddr()
 	idx := uint64(instance) % uint64(len(rmngr_addr))
 	debug.Fprintf(os.Stderr, "remote txn manager addr: %v, connecting to %v\n",
