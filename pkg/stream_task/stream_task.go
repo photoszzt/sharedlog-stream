@@ -333,7 +333,7 @@ func handleCtrlMsg(
 			commtypes.PushBuffer(b)
 		}
 		if args.guarantee == exactly_once_intr.ALIGN_CHKPT {
-			var tpLogOff []commtypes.TpLogOff
+			tpLogOff := make([]commtypes.TpLogOff, 0, len(args.ectx.Consumers()))
 			// use the last stream end marker seqnum here as this is the end of a stream
 			// there's no record after this record.
 			for idx, c := range args.ectx.Consumers() {
@@ -558,7 +558,7 @@ func createChkpt(ctx context.Context, args *StreamTaskArgs, tplogOff []commtypes
 	mc *snapshot_store.RedisSnapshotStore,
 ) error {
 	// no stores
-	if len(args.kvs) == 0 && len(args.wscs) == 0 {
+	if len(args.kvs) == 0 && len(args.wscs) == 0 && !args.ectx.AllConsumersIsInit() {
 		return mc.StoreSrcLogoff(ctx, tplogOff, args.ectx.SubstreamNum())
 	}
 	for _, kv := range args.kvs {

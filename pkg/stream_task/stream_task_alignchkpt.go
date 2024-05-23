@@ -219,8 +219,9 @@ func checkpoint(
 	rcm *checkpt.RedisChkptManager,
 	finalOutTpNames []string,
 ) error {
-	var tpLogOff []commtypes.TpLogOff
-	var chkptMeta []commtypes.ChkptMetaData
+	l := len(args.ectx.Consumers())
+	tpLogOff := make([]commtypes.TpLogOff, 0, l)
+	chkptMeta := make([]commtypes.ChkptMetaData, 0, l)
 	for idx, c := range args.ectx.Consumers() {
 		tlo := commtypes.TpLogOff{
 			Tp:     fmt.Sprintf("%s-%d", c.Stream().TopicName(), args.ectx.SubstreamNum()),

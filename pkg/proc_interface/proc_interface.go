@@ -11,19 +11,29 @@ type ProducersConsumers interface {
 	Producers() []producer_consumer.MeteredProducerIntr
 	Consumers() []*producer_consumer.MeteredConsumer
 	StartWarmup()
+	AllConsumersIsInit() bool
 }
 
 type BaseConsumersProducers struct {
-	consumers []*producer_consumer.MeteredConsumer
-	producers []producer_consumer.MeteredProducerIntr
+	consumers         []*producer_consumer.MeteredConsumer
+	producers         []producer_consumer.MeteredProducerIntr
+	allConsumerIsInit bool
 }
 
 func NewBaseSrcsSinks(srcs []*producer_consumer.MeteredConsumer,
 	sinks []producer_consumer.MeteredProducerIntr,
 ) BaseConsumersProducers {
+	allConsumerIsInit := true
+	for _, c := range srcs {
+		if !c.IsInitialSource() {
+			allConsumerIsInit = false
+			break
+		}
+	}
 	return BaseConsumersProducers{
-		consumers: srcs,
-		producers: sinks,
+		consumers:         srcs,
+		producers:         sinks,
+		allConsumerIsInit: allConsumerIsInit,
 	}
 }
 
@@ -42,6 +52,10 @@ func (pa *BaseConsumersProducers) StartWarmup() {
 	for _, sink := range pa.producers {
 		sink.StartWarmup()
 	}
+}
+
+func (pa *BaseConsumersProducers) AllConsumersIsInit() bool {
+	return pa.allConsumerIsInit
 }
 
 type ProcArgs interface {

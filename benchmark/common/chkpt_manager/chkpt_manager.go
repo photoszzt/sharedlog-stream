@@ -63,6 +63,7 @@ func PrintChkptMngrInput(c *common.ChkptMngrInput) {
 func (h *ChkptManagerHandler) genChkpt(ctx context.Context, input *common.ChkptMngrInput) error {
 	tpNameHash := h.srcStream.TopicNameHash()
 	useBuf := h.epochMarkerSerde.UsedBufferPool()
+	srcLogOff := make([]commtypes.TpLogOff, 0, input.SrcNumPart)
 	for i := uint8(0); i < input.SrcNumPart; i++ {
 		chkpt_tag := txn_data.ChkptTag(tpNameHash, i)
 		nameHashTag := sharedlog_stream.NameHashWithPartition(tpNameHash, i)
@@ -74,7 +75,7 @@ func (h *ChkptManagerHandler) genChkpt(ctx context.Context, input *common.ChkptM
 		if err != nil {
 			return err
 		}
-		_, err = h.srcStream.PushWithTag(ctx, encoded, i, []uint64{nameHashTag, chkpt_tag}, nil,
+		logOff, err := h.srcStream.PushWithTag(ctx, encoded, i, []uint64{nameHashTag, chkpt_tag}, nil,
 			sharedlog_stream.ControlRecordMeta, commtypes.EmptyProducerId)
 		if err != nil {
 			return err
@@ -83,8 +84,12 @@ func (h *ChkptManagerHandler) genChkpt(ctx context.Context, input *common.ChkptM
 			*b = encoded
 			commtypes.PushBuffer(b)
 		}
+		srcLogOff = append(srcLogOff, commtypes.TpLogOff{
+			Tp:     fmt.Sprintf("%s-%d", h.srcStream.TopicName(), i),
+			LogOff: logOff,
+		})
 	}
-	return nil
+	return h.rcm.StoreInitSrcLogoff(ctx, srcLogOff, input.SrcNumPart)
 }
 
 func (h *ChkptManagerHandler) Chkpt(ctx context.Context, input *common.ChkptMngrInput) *common.FnOutput {

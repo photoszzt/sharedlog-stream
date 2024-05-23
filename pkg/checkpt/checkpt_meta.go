@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/redis_client"
 	"strconv"
@@ -34,6 +35,18 @@ func NewRedisChkptManagerFromClients(rds []*redis.Client) RedisChkptManager {
 		rds: rds,
 	}
 	return rcm
+}
+
+func (c *RedisChkptManager) StoreInitSrcLogoff(ctx context.Context, srcLogOff []commtypes.TpLogOff, numSrcPar uint8) error {
+	l := len(c.rds)
+	for i := uint8(0); i < numSrcPar; i++ {
+		idx := int(i) % l
+		err := c.rds[idx].RPush(ctx, srcLogOff[i].Tp, srcLogOff[i].LogOff).Err()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *RedisChkptManager) InitReqRes(ctx context.Context) error {
