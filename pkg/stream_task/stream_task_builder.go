@@ -49,6 +49,7 @@ func NewStreamTaskBuilder() BuildStreamTask {
 			producerFlush: stats.NewPrintLogStatsCollector[int64]("producerFlush"),
 			kvcFlush:      stats.NewPrintLogStatsCollector[int64]("kvcFlush"),
 			wscFlush:      stats.NewPrintLogStatsCollector[int64]("wscFlush"),
+			finishChkpt:   stats.NewStatsCollector[int64]("finishChkpt", stats.DEFAULT_COLLECT_DURATION),
 
 			txnCounter:                 stats.NewCounter("txnCount"),
 			waitedInCmtCounter:         stats.NewCounter("waitedPrevTxnInCmtCount"),

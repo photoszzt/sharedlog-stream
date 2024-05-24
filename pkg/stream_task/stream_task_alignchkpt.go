@@ -258,10 +258,13 @@ func checkpoint(
 		return err
 	}
 	if t.isFinalStage {
+		beg := time.Now()
 		err = rcm.FinishChkpt(ctx, finalOutTpNames)
 		if err != nil {
 			return err
 		}
+		elapsed := time.Since(beg).Microseconds()
+		t.finishChkpt.AddSample(elapsed)
 	}
 	return nil
 }

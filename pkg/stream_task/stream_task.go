@@ -53,6 +53,7 @@ type StreamTask struct {
 	producerFlush     stats.PrintLogStatsCollector[int64]
 	kvcFlush          stats.PrintLogStatsCollector[int64]
 	wscFlush          stats.PrintLogStatsCollector[int64]
+	finishChkpt       stats.StatsCollector[int64]
 
 	txnCounter                 stats.Counter
 	waitedInCmtCounter         stats.Counter
@@ -83,6 +84,7 @@ func (t *StreamTask) PrintRemainingStats() {
 	t.producerFlush.PrintRemainingStats()
 	t.kvcFlush.PrintRemainingStats()
 	t.wscFlush.PrintRemainingStats()
+	t.finishChkpt.PrintRemainingStats()
 	if t.txnCounter.GetCount() != 0 {
 		t.txnCounter.Report()
 		t.waitedInCmtCounter.Report()
