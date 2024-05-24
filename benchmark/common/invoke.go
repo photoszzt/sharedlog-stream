@@ -356,9 +356,9 @@ func Invoke(invokeParam InvokeFuncParam,
 		&scaleResponse, "scale", invokeParam.Local)
 	var wg sync.WaitGroup
 	if exactly_once_intr.GuaranteeMth(baseQueryInput.GuaranteeMth) == exactly_once_intr.ALIGN_CHKPT {
-		InvokeRedisSetup(client, &RedisSetupInput{
-			FinalOutputTopicNames: params.SrcInvokeConfig.FinalTpNames,
-		}, invokeParam.GatewayUrl, invokeParam.Local)
+		// InvokeRedisSetup(client, &RedisSetupInput{
+		// 	FinalOutputTopicNames: params.SrcInvokeConfig.FinalTpNames,
+		// }, invokeParam.GatewayUrl, invokeParam.Local)
 		chkMngrConfig := ChkptMngrInput{
 			SrcTopicName:          params.SrcInvokeConfig.TopicName,
 			FinalOutputTopicNames: params.SrcInvokeConfig.FinalTpNames,

@@ -11,10 +11,13 @@ import (
 	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
+	"strings"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"github.com/go-redis/redis/v9"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // when restoring the checkpoint, it's reading from
@@ -142,6 +145,31 @@ func (em *ChkptMngr) GetCurrentEpoch() uint32             { return em.prodId.Tas
 func (em *ChkptMngr) GetCurrentTaskId() uint64            { return em.prodId.TaskId }
 func (em *ChkptMngr) GetProducerId() commtypes.ProducerId { return em.prodId }
 
+func GetChkptMngrAddr() []string {
+	raw_addr := os.Getenv("CHKPT_MNGR_ADDR")
+	return strings.Split(raw_addr, ",")
+}
+
+func PrepareChkptClientGrpc() (*grpc.ClientConn, error) {
+	var opts []grpc.DialOption
+	retryPolicy := `{
+		"methodConfig": [{
+		  "name": [{"service": "checkpt.ChkptMngr"}],
+		  "waitForReady": true,
+		  "retryPolicy": {
+			  "MaxAttempts": 4,
+			  "InitialBackoff": ".002s",
+			  "MaxBackoff": ".01s",
+			  "BackoffMultiplier": 2.0,
+			  "RetryableStatusCodes": [ "UNAVAILABLE" ]
+		  }
+		}]}`
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(retryPolicy))
+	mngr_addr := GetChkptMngrAddr()
+	debug.Fprintf(os.Stderr, "chkpt mngr addr: %v, connecting to %v\n", mngr_addr, mngr_addr[0])
+	return grpc.Dial(mngr_addr[0], opts...)
+}
+
 func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	rc []*redis.Client,
 	mc *snapshot_store.RedisSnapshotStore,
@@ -157,6 +185,11 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 		args.ectx.SubstreamNum(), prodId.String(), args.warmup, args.flushEvery, args.waitEndMark)
 	prodConsumerExactlyOnce(args, chkptMngr)
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
+	conn, err := PrepareChkptClientGrpc()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	client := checkpt.NewChkptMngrClient(conn)
 	warmupCheck.StartWarmup()
 	alignChkptTime := stats.NewStatsCollector[int64](fmt.Sprintf("createChkpt_%d(ms)", args.ectx.SubstreamNum()),
 		stats.DEFAULT_COLLECT_DURATION)
@@ -199,7 +232,7 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 				return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck, mc)
 			}
 			s := time.Now()
-			err := checkpoint(ctx, t, args, ctrlRawMsgArr, mc, &chkptMngr.rcm, finalOutTpNames)
+			err := checkpoint(ctx, t, args, ctrlRawMsgArr, mc, client, finalOutTpNames)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
@@ -216,7 +249,8 @@ func checkpoint(
 	ctrlRawMsgArr []*commtypes.RawMsgAndSeq,
 	// mc *snapshot_store.MinioChkptStore,
 	mc *snapshot_store.RedisSnapshotStore,
-	rcm *checkpt.RedisChkptManager,
+	// rcm *checkpt.RedisChkptManager,
+	client checkpt.ChkptMngrClient,
 	finalOutTpNames []string,
 ) error {
 	l := len(args.ectx.Consumers())
@@ -259,7 +293,7 @@ func checkpoint(
 	}
 	if t.isFinalStage {
 		beg := time.Now()
-		err = rcm.FinishChkpt(ctx, finalOutTpNames)
+		_, err = client.FinishChkpt(ctx, &checkpt.FinMsg{TopicNames: finalOutTpNames})
 		if err != nil {
 			return err
 		}

@@ -40,27 +40,29 @@ func reusePort(network, address string, conn syscall.RawConn) error {
 
 func (h *emptyFuncHanlder) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if !lunched.Load() {
-		lunched.Store(true)
-		parsed := &common.RTxnMngrInput{}
-		err := json.Unmarshal(input, parsed)
-		if err != nil {
-			return nil, err
-		}
-		config := &net.ListenConfig{Control: reusePort}
-		lis, err := config.Listen(ctx, "tcp", fmt.Sprintf(":%d", port))
-		if err != nil {
-			log.Printf("failed to listen %v: %v", port, err)
-			return nil, err
-		}
-		grpcServer := grpc.NewServer()
-		remote_txn_rpc.RegisterRemoteTxnMngrServer(grpcServer,
-			transaction.NewRemoteTxnManagerServer(h.env, commtypes.SerdeFormat(parsed.SerdeFormat)))
-		go func() {
-			err = grpcServer.Serve(lis)
+		swapped := lunched.CompareAndSwap(false, true)
+		if swapped {
+			parsed := &common.RTxnMngrInput{}
+			err := json.Unmarshal(input, parsed)
 			if err != nil {
-				log.Fatalf("failed to serve grpc server: %v", err)
+				return nil, err
 			}
-		}()
+			config := &net.ListenConfig{Control: reusePort}
+			lis, err := config.Listen(ctx, "tcp", fmt.Sprintf(":%d", port))
+			if err != nil {
+				log.Printf("failed to listen %v: %v", port, err)
+				return nil, err
+			}
+			grpcServer := grpc.NewServer()
+			remote_txn_rpc.RegisterRemoteTxnMngrServer(grpcServer,
+				transaction.NewRemoteTxnManagerServer(h.env, commtypes.SerdeFormat(parsed.SerdeFormat)))
+			go func() {
+				err = grpcServer.Serve(lis)
+				if err != nil {
+					log.Fatalf("failed to serve grpc server: %v", err)
+				}
+			}()
+		}
 	}
 	timeout := time.Duration(300) * time.Second
 	start := time.Now()

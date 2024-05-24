@@ -20,9 +20,6 @@ import (
 type funcHandlerFactory struct{}
 
 func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.FuncHandler, error) {
-	// go func() {
-	// 	log.Print(http.ListenAndServe("localhost:6060", nil))
-	// }()
 	fmt.Fprintf(os.Stderr, "Enter nexmark: funcName: %v\n", funcName)
 	switch funcName {
 	case "source":
@@ -82,7 +79,7 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 	case "lastEmpty":
 		return handlers.NewLastEmptyQuery(env, funcName), nil
 	case "chkptmngr":
-		return chkpt_manager.NewChkptManager(env), nil
+		return chkpt_manager.NewChkptManagerHandlerGrpc(env), nil
 	case "redisSetup":
 		return redis_setup.NewRedisSetupHandler(env), nil
 	case "fanout":

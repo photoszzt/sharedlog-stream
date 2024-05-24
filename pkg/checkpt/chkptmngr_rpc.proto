@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+option go_package = "sharedlog-stream/pkg/checkpt";
+
+package checkpt;
+
+import "google/protobuf/empty.proto";
+
+message FinMsg {
+  repeated string topicNames = 1;
+}
+
+message Ended {
+  bool ended = 1;
+}
+
+service ChkptMngr {
+  rpc FinishChkpt(FinMsg) returns (google.protobuf.Empty) {}
+  rpc ReqChkmngrEndedIfNot(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+}

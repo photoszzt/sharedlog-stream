@@ -16,12 +16,14 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
+	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 	"sync"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type nexmarkSourceHandler struct {
@@ -33,8 +35,9 @@ type nexmarkSourceHandler struct {
 	eventsPerGen     uint64
 	duration         time.Duration
 	streamPusher     *sharedlog_stream.StreamPush
-	rcm              checkpt.RedisChkptManager
-	bufPush          bool
+	// rcm              checkpt.RedisChkptManager
+	chkptClient checkpt.ChkptMngrClient
+	bufPush     bool
 }
 
 func NewNexmarkSource(env types.Environment, funcName string) types.FuncHandler {
@@ -52,7 +55,7 @@ func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, 
 		return nil, err
 	}
 	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
-	h.rcm = checkpt.NewRedisChkptManager()
+	// h.rcm = checkpt.NewRedisChkptManager()
 	output := h.eventGeneration(ctx, inputConfig)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -332,9 +335,16 @@ func (h *nexmarkSourceHandler) eventGeneration(
 	commitEveryMs := time.Duration(inputConfig.CommitEveryMs) * time.Millisecond
 	gua := exactly_once_intr.GuaranteeMth(inputConfig.GuaranteeMth)
 	if gua == exactly_once_intr.ALIGN_CHKPT {
+		conn, err := stream_task.PrepareChkptClientGrpc()
+		if err != nil {
+			return common.GenErrFnOutput(err)
+		}
+		client := checkpt.NewChkptMngrClient(conn)
+		h.chkptClient = client
 		for {
 			if time.Since(startTime) >= commitEveryMs {
-				err := h.genFirstChkpt(ctx, inputConfig.FinalOutTpNames, inputConfig.ParNum)
+				// err := h.genFirstChkpt(ctx, inputConfig.FinalOutTpNames, inputConfig.ParNum)
+				err := h.genFirstChkpt(inputConfig.ParNum)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "gen first chkpt failed: %v\n", err)
 				}
@@ -381,19 +391,20 @@ func (h *nexmarkSourceHandler) eventGeneration(
 		if !procArgs.eventGenerator.HasNext() || procArgs.idx == int(h.eventsPerGen) || h.duration != 0 && time.Since(startTime) >= h.duration {
 			if inputConfig.WaitForEndMark {
 				if gua == exactly_once_intr.ALIGN_CHKPT {
-					err = h.rcm.ReqChkMngrEnd(ctx)
-					if err != nil {
-						return common.GenErrFnOutput(err)
-					}
-					for {
-						got, err := h.rcm.GetChkMngrEnded(ctx)
-						if err != nil {
-							return common.GenErrFnOutput(err)
-						}
-						if got == 1 {
-							break
-						}
-					}
+					_, err = h.chkptClient.ReqChkmngrEndedIfNot(ctx, &emptypb.Empty{})
+					// err = h.rcm.ReqChkMngrEnd(ctx)
+					// if err != nil {
+					// 	return common.GenErrFnOutput(err)
+					// }
+					// for {
+					// 	got, err := h.rcm.GetChkMngrEnded(ctx)
+					// 	if err != nil {
+					// 		return common.GenErrFnOutput(err)
+					// 	}
+					// 	if got == 1 {
+					// 		break
+					// 	}
+					// }
 					fmt.Fprintf(os.Stderr, "[%v] chkmngr has terminated\n", inputConfig.ParNum)
 				}
 				for _, par := range procArgs.parNumArr {
@@ -437,9 +448,12 @@ func (h *nexmarkSourceHandler) genEndMark(startTime time.Time, parNum uint8,
 	return nil
 }
 
-func (h *nexmarkSourceHandler) genFirstChkpt(ctx context.Context,
-	finalOutputTopicNames []string, parNum uint8,
-) error {
+// func (h *nexmarkSourceHandler) genFirstChkpt(ctx context.Context,
+//
+//	finalOutputTopicNames []string, parNum uint8,
+//
+// ) error {
+func (h *nexmarkSourceHandler) genFirstChkpt(parNum uint8) error {
 	marker := commtypes.EpochMarker{
 		Mark:      commtypes.CHKPT_MARK,
 		StartTime: 1,
@@ -455,7 +469,8 @@ func (h *nexmarkSourceHandler) genFirstChkpt(ctx context.Context,
 		Partitions: []uint8{parNum},
 		Mark:       commtypes.CHKPT_MARK,
 	}
-	return h.rcm.ResetCheckPointCount(ctx, finalOutputTopicNames)
+	// return h.rcm.ResetCheckPointCount(ctx, finalOutputTopicNames)
+	return nil
 }
 
 func (h *nexmarkSourceHandler) flush(ctx context.Context, stream *sharedlog_stream.SizableShardedSharedLogStream) {
