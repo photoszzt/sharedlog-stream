@@ -55,7 +55,7 @@ func PrintChkptMngrInput(c *common.ChkptMngrInput) {
 	fmt.Fprintf(os.Stderr, "\tFinalNumOutPartitions: %v\n", c.FinalNumOutPartitions)
 	fmt.Fprintf(os.Stderr, "\tBufMaxSize           : %v\n", c.BufMaxSize)
 	fmt.Fprintf(os.Stderr, "\tSrcNumPart           : %v\n", c.SrcNumPart)
-	fmt.Fprintf(os.Stderr, "\tChkptEveryMs: %v\n", c.ChkptEveryMs)
+	fmt.Fprintf(os.Stderr, "\tChkptEveryMs         : %v\n", c.ChkptEveryMs)
 	fmt.Fprintf(os.Stderr, "\tGuarantee            : %v\n", exactly_once_intr.GuaranteeMth(c.GuaranteeMth).String())
 	fmt.Fprintf(os.Stderr, "\tSerdeFormat          : %v\n", commtypes.SerdeFormat(c.SerdeFormat).String())
 }
