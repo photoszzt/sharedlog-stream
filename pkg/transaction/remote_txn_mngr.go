@@ -197,14 +197,16 @@ func (s *RemoteTxnManager) AppendTpPar(ctx context.Context, in *txn_data.TxnMeta
 		tm.waitPrevTxn.AddSample(stats.Elapsed(tBeg).Microseconds())
 		tm.bgErrg, tm.bgCtx = errgroup.WithContext(ctx)
 	}
-	txnMeta := txn_data.TxnMetadata{
-		State:           txn_data.TransactionState(in.State),
-		TopicPartitions: in.TopicPartitions,
-	}
-	_, err := tm.appendToTransactionLog(ctx, txnMeta, []uint64{tm.txnLogTag})
-	// debug.Fprint(os.Stderr, "done AppendTpPar\n")
-	if err != nil {
-		return err
+	if len(in.TopicPartitions) > 0 {
+		txnMeta := txn_data.TxnMetadata{
+			State:           txn_data.TransactionState(in.State),
+			TopicPartitions: in.TopicPartitions,
+		}
+		_, err := tm.appendToTransactionLog(ctx, txnMeta, []uint64{tm.txnLogTag})
+		// debug.Fprint(os.Stderr, "done AppendTpPar\n")
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
