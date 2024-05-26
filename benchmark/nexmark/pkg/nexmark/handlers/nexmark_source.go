@@ -392,6 +392,7 @@ func (h *nexmarkSourceHandler) eventGeneration(
 		if !procArgs.eventGenerator.HasNext() || procArgs.idx == int(h.eventsPerGen) || h.duration != 0 && time.Since(startTime) >= h.duration {
 			if inputConfig.WaitForEndMark {
 				if gua == exactly_once_intr.ALIGN_CHKPT {
+					debug.Fprintf(os.Stderr, "requesting chkmngr to end\n")
 					_, err = h.chkptClient.ReqChkmngrEndedIfNot(ctx, &emptypb.Empty{})
 					// err = h.rcm.ReqChkMngrEnd(ctx)
 					// if err != nil {
