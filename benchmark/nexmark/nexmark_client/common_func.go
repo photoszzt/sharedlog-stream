@@ -29,6 +29,7 @@ func NewQueryInput(serdeFormat commtypes.SerdeFormat) *common.QueryInput {
 	return &common.QueryInput{
 		Duration:       uint32(FLAGS_duration),
 		FaasGateway:    FLAGS_faas_gateway,
+		Engine1:        FLAGS_engine_1,
 		GuaranteeMth:   uint8(guarantee),
 		CommitEveryMs:  FLAGS_commit_everyMs,
 		SerdeFormat:    uint8(serdeFormat),

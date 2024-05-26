@@ -199,6 +199,7 @@ func (h *nexmarkSourceHandler) setupGeneratorConfig(inputConfig *ntypes.NexMarkC
 	fmt.Fprintf(os.Stderr, "\tParNum         : %v\n", inputConfig.ParNum)
 	fmt.Fprintf(os.Stderr, "\tNumSrcInstance : %v\n", inputConfig.NumSrcInstance)
 	fmt.Fprintf(os.Stderr, "\tGuarantee      : %v\n", exactly_once_intr.GuaranteeMth(inputConfig.GuaranteeMth).String())
+	fmt.Fprintf(os.Stderr, "\tEngine1        : %v\n", inputConfig.Engine1)
 	h.generatorConfig = generatorConfig
 	h.eventsPerGen = inputConfig.EventsNum / uint64(h.generatorConfig.Configuration.NumEventGenerators)
 	h.duration = time.Duration(inputConfig.Duration) * time.Second
@@ -335,7 +336,7 @@ func (h *nexmarkSourceHandler) eventGeneration(
 	commitEveryMs := time.Duration(inputConfig.CommitEveryMs) * time.Millisecond
 	gua := exactly_once_intr.GuaranteeMth(inputConfig.GuaranteeMth)
 	if gua == exactly_once_intr.ALIGN_CHKPT {
-		conn, err := stream_task.PrepareChkptClientGrpc()
+		conn, err := stream_task.PrepareChkptClientGrpc(inputConfig.Engine1)
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}

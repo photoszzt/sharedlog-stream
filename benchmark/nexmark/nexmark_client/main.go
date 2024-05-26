@@ -15,6 +15,7 @@ import (
 
 var (
 	FLAGS_faas_gateway    string
+	FLAGS_engine_1        string
 	FLAGS_app_name        string
 	FLAGS_duration        int
 	FLAGS_events_num      int
@@ -60,6 +61,7 @@ func invokeTestSrcFunc(client *http.Client, srcInvokeConfig common.SrcInvokeConf
 
 func main() {
 	flag.StringVar(&FLAGS_faas_gateway, "faas_gateway", "127.0.0.1:8081", "")
+	flag.StringVar(&FLAGS_engine_1, "engine1", "127.0.0.1:6060", "url for checkpt mngr on engine 1")
 	flag.StringVar(&FLAGS_app_name, "app_name", "q1", "")
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.StringVar(&FLAGS_workload_config, "wconfig", "./wconfig.json", "path to a json file that stores workload config")
@@ -106,6 +108,7 @@ func main() {
 			EventsNum:      uint64(FLAGS_events_num),
 			SerdeFormat:    serdeFormat,
 			FaasGateway:    FLAGS_faas_gateway,
+			Engine1:        FLAGS_engine_1,
 			Duration:       uint32(FLAGS_duration),
 			Tps:            uint32(FLAGS_tps),
 			FlushMs:        uint32(FLAGS_src_flush_ms),

@@ -16,6 +16,7 @@ type QueryInput struct {
 	TestParams            map[string]commtypes.FailParam `json:"testParams,omitempty"`
 	AppId                 string                         `json:"aid"`
 	FaasGateway           string                         `json:"gateway"`
+	Engine1               string                         `json:"engine1,omitempty"`
 	NumOutPartitions      []uint8                        `json:"numOutPartition,omitempty"`
 	NumSubstreamProducer  []uint8                        `json:"numSubstreamProducer,omitempty"`
 	OutputTopicNames      []string                       `json:"outputTopicName,omitempty"`
@@ -41,6 +42,7 @@ func (q *QueryInput) Clone() QueryInput {
 		TestParams:           q.TestParams,
 		AppId:                q.AppId,
 		FaasGateway:          q.FaasGateway,
+		Engine1:              q.Engine1,
 		NumOutPartitions:     q.NumOutPartitions,
 		NumSubstreamProducer: q.NumSubstreamProducer,
 		OutputTopicNames:     q.OutputTopicNames,

@@ -19,6 +19,7 @@ type StreamTaskArgs struct {
 	appId                 string
 	transactionalId       string
 	faas_gateway          string
+	engine1               string
 	flushEvery            time.Duration
 	// exactly once: commitEvery overwrites flushEvery if commitEvery < flushEvery
 	commitEvery              time.Duration
@@ -95,6 +96,7 @@ type SetFaasGateway interface {
 
 type BuildStreamTaskArgs interface {
 	Build() (*StreamTaskArgs, error)
+	Engine1(string) BuildStreamTaskArgs
 	WindowStoreChangelogs(map[string]store.WindowStoreOpWithChangelog) BuildStreamTaskArgs
 	KVStoreChangelogs(map[string]store.KeyValueStoreOpWithChangelog) BuildStreamTaskArgs
 	WindowStoreOps([]store.WindowStoreOp) BuildStreamTaskArgs
@@ -152,6 +154,11 @@ func (args *StreamTaskArgsBuilder) BufMaxSize(bufMaxSize uint32) SetFaasGateway 
 
 func (args *StreamTaskArgsBuilder) FaasGateway(gateway string) BuildStreamTaskArgs {
 	args.stArgs.faas_gateway = gateway
+	return args
+}
+
+func (args *StreamTaskArgsBuilder) Engine1(engine1 string) BuildStreamTaskArgs {
+	args.stArgs.engine1 = engine1
 	return args
 }
 

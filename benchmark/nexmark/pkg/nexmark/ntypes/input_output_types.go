@@ -23,6 +23,7 @@ type NexMarkConfigInput struct {
 	TopicName              string        `json:"topic_name"`
 	RateShape              string        `json:"rate_shape"` //
 	AppId                  string        `json:"aid"`
+	Engine1                string        `json:"engine1,omitempty"`
 	EventsNum              uint64        `json:"events_num"`  //
 	RatePeriod             time.Duration `json:"rate_period"` //
 	FinalOutTpNames        []string      `json:"finOutTpNs,omitempty"`
@@ -100,6 +101,7 @@ func ConvertToNexmarkConfiguration(config *NexMarkConfigInput) (*NexMarkConfig, 
 
 type GeneratorParams struct {
 	FaasGateway    string
+	Engine1        string
 	EventsNum      uint64
 	Duration       uint32
 	Tps            uint32
@@ -120,6 +122,7 @@ func (gp *GeneratorParams) InvokeSourceFunc(client *http.Client,
 	avgBidBytes := DEFAULT_AVG_BID_SIZE + srcInvokeConfig.AdditionalBytes
 	avgPersonBytes := DEFAULT_AVG_PERSON_SIZE + srcInvokeConfig.AdditionalBytes
 	nexmarkConfig := NewNexMarkConfigInput(srcInvokeConfig.TopicName, gp.SerdeFormat)
+	nexmarkConfig.Engine1 = gp.Engine1
 	nexmarkConfig.FinalOutTpNames = srcInvokeConfig.FinalTpNames
 	nexmarkConfig.Duration = gp.Duration
 	nexmarkConfig.AppId = srcInvokeConfig.AppId
