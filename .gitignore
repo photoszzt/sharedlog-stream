@@ -5,3 +5,7 @@ bin
 *_stat
 gen_serde/gen_serde
 q8_out/
+q1_out/
+q2_out/
+q3_out/
+q4_out/
