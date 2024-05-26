@@ -1,9 +1,11 @@
 package common
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
+	"sharedlog-stream/pkg/checkpt"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"strconv"
@@ -321,7 +323,7 @@ func InvokeRedisSetup(client *http.Client, rsi *RedisSetupInput, faas_gateway st
 	}
 }
 
-func Invoke(invokeParam InvokeFuncParam,
+func Invoke(ctx context.Context, invokeParam InvokeFuncParam,
 	baseQueryInput *QueryInput,
 	invokeSourceFunc InvokeSrcFunc,
 	additionalBytes int,
@@ -359,6 +361,15 @@ func Invoke(invokeParam InvokeFuncParam,
 		// InvokeRedisSetup(client, &RedisSetupInput{
 		// 	FinalOutputTopicNames: params.SrcInvokeConfig.FinalTpNames,
 		// }, invokeParam.GatewayUrl, invokeParam.Local)
+		conn, err := checkpt.PrepareChkptClientGrpc()
+		if err != nil {
+			return nil, err
+		}
+		grpc_c := checkpt.NewChkptMngrClient(conn)
+		_, err = grpc_c.Init(ctx, &checkpt.FinMsg{TopicNames: params.SrcInvokeConfig.FinalTpNames})
+		if err != nil {
+			return nil, err
+		}
 		chkMngrConfig := ChkptMngrInput{
 			SrcTopicName:          params.SrcInvokeConfig.TopicName,
 			FinalOutputTopicNames: params.SrcInvokeConfig.FinalTpNames,

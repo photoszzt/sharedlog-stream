@@ -23,8 +23,12 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ChkptMngrClient interface {
+	Init(ctx context.Context, in *FinMsg, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	FinishChkpt(ctx context.Context, in *FinMsg, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	ReqChkmngrEndedIfNot(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	CheckChkptFinish(ctx context.Context, in *CheckFinMsg, opts ...grpc.CallOption) (*ChkptFinished, error)
+	ChkptMngrEnded(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*Ended, error)
+	ResetCheckpointCount(ctx context.Context, in *FinMsg, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type chkptMngrClient struct {
@@ -33,6 +37,15 @@ type chkptMngrClient struct {
 
 func NewChkptMngrClient(cc grpc.ClientConnInterface) ChkptMngrClient {
 	return &chkptMngrClient{cc}
+}
+
+func (c *chkptMngrClient) Init(ctx context.Context, in *FinMsg, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/checkpt.ChkptMngr/Init", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *chkptMngrClient) FinishChkpt(ctx context.Context, in *FinMsg, opts ...grpc.CallOption) (*emptypb.Empty, error) {
@@ -53,12 +66,43 @@ func (c *chkptMngrClient) ReqChkmngrEndedIfNot(ctx context.Context, in *emptypb.
 	return out, nil
 }
 
+func (c *chkptMngrClient) CheckChkptFinish(ctx context.Context, in *CheckFinMsg, opts ...grpc.CallOption) (*ChkptFinished, error) {
+	out := new(ChkptFinished)
+	err := c.cc.Invoke(ctx, "/checkpt.ChkptMngr/CheckChkptFinish", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *chkptMngrClient) ChkptMngrEnded(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*Ended, error) {
+	out := new(Ended)
+	err := c.cc.Invoke(ctx, "/checkpt.ChkptMngr/ChkptMngrEnded", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *chkptMngrClient) ResetCheckpointCount(ctx context.Context, in *FinMsg, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/checkpt.ChkptMngr/ResetCheckpointCount", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ChkptMngrServer is the server API for ChkptMngr service.
 // All implementations must embed UnimplementedChkptMngrServer
 // for forward compatibility
 type ChkptMngrServer interface {
+	Init(context.Context, *FinMsg) (*emptypb.Empty, error)
 	FinishChkpt(context.Context, *FinMsg) (*emptypb.Empty, error)
 	ReqChkmngrEndedIfNot(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
+	CheckChkptFinish(context.Context, *CheckFinMsg) (*ChkptFinished, error)
+	ChkptMngrEnded(context.Context, *emptypb.Empty) (*Ended, error)
+	ResetCheckpointCount(context.Context, *FinMsg) (*emptypb.Empty, error)
 	mustEmbedUnimplementedChkptMngrServer()
 }
 
@@ -66,11 +110,23 @@ type ChkptMngrServer interface {
 type UnimplementedChkptMngrServer struct {
 }
 
+func (UnimplementedChkptMngrServer) Init(context.Context, *FinMsg) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Init not implemented")
+}
 func (UnimplementedChkptMngrServer) FinishChkpt(context.Context, *FinMsg) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FinishChkpt not implemented")
 }
 func (UnimplementedChkptMngrServer) ReqChkmngrEndedIfNot(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReqChkmngrEndedIfNot not implemented")
+}
+func (UnimplementedChkptMngrServer) CheckChkptFinish(context.Context, *CheckFinMsg) (*ChkptFinished, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckChkptFinish not implemented")
+}
+func (UnimplementedChkptMngrServer) ChkptMngrEnded(context.Context, *emptypb.Empty) (*Ended, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ChkptMngrEnded not implemented")
+}
+func (UnimplementedChkptMngrServer) ResetCheckpointCount(context.Context, *FinMsg) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResetCheckpointCount not implemented")
 }
 func (UnimplementedChkptMngrServer) mustEmbedUnimplementedChkptMngrServer() {}
 
@@ -83,6 +139,24 @@ type UnsafeChkptMngrServer interface {
 
 func RegisterChkptMngrServer(s grpc.ServiceRegistrar, srv ChkptMngrServer) {
 	s.RegisterService(&ChkptMngr_ServiceDesc, srv)
+}
+
+func _ChkptMngr_Init_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FinMsg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChkptMngrServer).Init(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/checkpt.ChkptMngr/Init",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChkptMngrServer).Init(ctx, req.(*FinMsg))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _ChkptMngr_FinishChkpt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -121,6 +195,60 @@ func _ChkptMngr_ReqChkmngrEndedIfNot_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ChkptMngr_CheckChkptFinish_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckFinMsg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChkptMngrServer).CheckChkptFinish(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/checkpt.ChkptMngr/CheckChkptFinish",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChkptMngrServer).CheckChkptFinish(ctx, req.(*CheckFinMsg))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ChkptMngr_ChkptMngrEnded_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChkptMngrServer).ChkptMngrEnded(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/checkpt.ChkptMngr/ChkptMngrEnded",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChkptMngrServer).ChkptMngrEnded(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ChkptMngr_ResetCheckpointCount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FinMsg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChkptMngrServer).ResetCheckpointCount(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/checkpt.ChkptMngr/ResetCheckpointCount",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChkptMngrServer).ResetCheckpointCount(ctx, req.(*FinMsg))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ChkptMngr_ServiceDesc is the grpc.ServiceDesc for ChkptMngr service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -129,12 +257,28 @@ var ChkptMngr_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ChkptMngrServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "Init",
+			Handler:    _ChkptMngr_Init_Handler,
+		},
+		{
 			MethodName: "FinishChkpt",
 			Handler:    _ChkptMngr_FinishChkpt_Handler,
 		},
 		{
 			MethodName: "ReqChkmngrEndedIfNot",
 			Handler:    _ChkptMngr_ReqChkmngrEndedIfNot_Handler,
+		},
+		{
+			MethodName: "CheckChkptFinish",
+			Handler:    _ChkptMngr_CheckChkptFinish_Handler,
+		},
+		{
+			MethodName: "ChkptMngrEnded",
+			Handler:    _ChkptMngr_ChkptMngrEnded_Handler,
+		},
+		{
+			MethodName: "ResetCheckpointCount",
+			Handler:    _ChkptMngr_ResetCheckpointCount_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

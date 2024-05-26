@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
-	"net"
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/checkpt"
@@ -15,18 +13,17 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/txn_data"
-	"strconv"
-	"sync/atomic"
-	"syscall"
 	"time"
 
+	"github.com/rs/zerolog/log"
+	"google.golang.org/protobuf/types/known/emptypb"
+
 	"cs.utexas.edu/zjia/faas/types"
-	"google.golang.org/grpc"
 )
 
 type ChkptManagerHandlerGrpc struct {
 	env              types.Environment
-	s                *checkpt.CheckpointManagerServer
+	client           checkpt.ChkptMngrClient
 	rcm              checkpt.RedisChkptManager
 	epochMarkerSerde commtypes.SerdeG[commtypes.EpochMarker]
 	srcStream        *sharedlog_stream.ShardedSharedLogStream
@@ -38,43 +35,20 @@ func NewChkptManagerHandlerGrpc(env types.Environment) types.FuncHandler {
 	}
 }
 
-func reusePort(network, address string, conn syscall.RawConn) error {
-	return conn.Control(func(fd uintptr) {
-		_ = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
-	})
-}
-
-var (
-	lunched atomic.Bool
-	port    = checkPort()
-)
-
 func (h *ChkptManagerHandlerGrpc) Call(ctx context.Context, input []byte) ([]byte, error) {
 	parsedInput := &common.ChkptMngrInput{}
 	err := json.Unmarshal(input, parsedInput)
 	if err != nil {
 		return nil, fmt.Errorf("json unmarshal: %v", err)
 	}
-	if !lunched.Load() {
-		swapped := lunched.CompareAndSwap(false, true)
-		if swapped {
-			config := &net.ListenConfig{Control: reusePort}
-			lis, err := config.Listen(ctx, "tcp", fmt.Sprintf(":%d", port))
-			if err != nil {
-				log.Printf("failed to listen %v: %v", port, err)
-				return nil, err
-			}
-			h.s = checkpt.NewCheckpointManagerServer()
-			h.s.ResetCheckPointCount(parsedInput.FinalOutputTopicNames)
-			grpcServer := grpc.NewServer()
-			checkpt.RegisterChkptMngrServer(grpcServer, h.s)
-			go func() {
-				err = grpcServer.Serve(lis)
-				if err != nil {
-					log.Fatalf("failed to serve grpc server: %v", err)
-				}
-			}()
-		}
+	conn, err := checkpt.PrepareChkptClientGrpc()
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+	h.client = checkpt.NewChkptMngrClient(conn)
+	_, err = h.client.ResetCheckpointCount(ctx, &checkpt.FinMsg{TopicNames: parsedInput.FinalOutputTopicNames})
+	if err != nil {
+		log.Fatal().Err(err)
 	}
 	h.rcm = checkpt.NewRedisChkptManager()
 	PrintChkptMngrInput(parsedInput)
@@ -119,6 +93,29 @@ func (h *ChkptManagerHandlerGrpc) genChkpt(ctx context.Context, input *common.Ch
 	return h.rcm.StoreInitSrcLogoff(ctx, srcLogOff, input.SrcNumPart)
 }
 
+func (h *ChkptManagerHandlerGrpc) WaitForChkptFinish(ctx context.Context, input *common.ChkptMngrInput) (bool, error) {
+	for {
+		r, err := h.client.CheckChkptFinish(ctx, &checkpt.CheckFinMsg{
+			TopicNames: input.FinalOutputTopicNames,
+			Pars:       input.FinalNumOutPartitions,
+		})
+		if err != nil {
+			return false, err
+		}
+		if r.Fin {
+			return false, nil
+		}
+		ended, err := h.client.ChkptMngrEnded(ctx, &emptypb.Empty{})
+		if err != nil {
+			return false, err
+		}
+		if ended.Ended {
+			return true, nil
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func (h *ChkptManagerHandlerGrpc) Chkpt(ctx context.Context, input *common.ChkptMngrInput) *common.FnOutput {
 	var err error
 	guarantee := exactly_once_intr.GuaranteeMth(input.GuaranteeMth)
@@ -139,7 +136,7 @@ func (h *ChkptManagerHandlerGrpc) Chkpt(ctx context.Context, input *common.Chkpt
 			return common.GenErrFnOutput(err)
 		}
 		debug.Fprintf(os.Stderr, "waiting for the first checkpt done\n")
-		should_exit, err := h.s.WaitForChkptFinish(input.FinalOutputTopicNames, input.FinalNumOutPartitions)
+		should_exit, err := h.WaitForChkptFinish(ctx, input)
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
@@ -149,8 +146,11 @@ func (h *ChkptManagerHandlerGrpc) Chkpt(ctx context.Context, input *common.Chkpt
 		debug.Fprintf(os.Stderr, "first checkpt is done\n")
 		now := time.Now()
 		for {
-			ended := h.s.Ended()
-			if ended {
+			ended, err := h.client.ChkptMngrEnded(ctx, &emptypb.Empty{})
+			if err != nil {
+				return common.GenErrFnOutput(err)
+			}
+			if ended.Ended {
 				break
 			}
 			elapsed := time.Since(now)
@@ -160,7 +160,7 @@ func (h *ChkptManagerHandlerGrpc) Chkpt(ctx context.Context, input *common.Chkpt
 				time.Sleep(diff)
 			}
 			// debug.Fprintf(os.Stderr, "after sleep\n")
-			h.s.ResetCheckPointCount(input.FinalOutputTopicNames)
+			_, err = h.client.ResetCheckpointCount(ctx, &checkpt.FinMsg{TopicNames: input.FinalOutputTopicNames})
 			if err != nil {
 				debug.Fprintf(os.Stderr, "reset chkpt count err: %v\n", err)
 				return common.GenErrFnOutput(err)
@@ -173,7 +173,7 @@ func (h *ChkptManagerHandlerGrpc) Chkpt(ctx context.Context, input *common.Chkpt
 				return common.GenErrFnOutput(err)
 			}
 			// debug.Fprintf(os.Stderr, "after genChkpt\n")
-			should_exit, err := h.s.WaitForChkptFinish(input.FinalOutputTopicNames, input.FinalNumOutPartitions)
+			should_exit, err := h.WaitForChkptFinish(ctx, input)
 			if err != nil {
 				debug.Fprintf(os.Stderr, "wait for chkpt finish err: %v\n", err)
 				return common.GenErrFnOutput(err)
@@ -190,20 +190,4 @@ func (h *ChkptManagerHandlerGrpc) Chkpt(ctx context.Context, input *common.Chkpt
 	}
 	debug.Fprintf(os.Stderr, "chkptmngr exits with success\n")
 	return &common.FnOutput{Success: true}
-}
-
-func checkPort() int {
-	var err error
-	portStr := os.Getenv("CHKPT_MNGR_PORT")
-	var port int
-	if portStr == "" {
-		port = 6060
-	} else {
-		port, err = strconv.Atoi(portStr)
-		if err != nil {
-			log.Fatalf("[FATAL] Failed to read rtx port")
-		}
-	}
-	log.Printf("[INFO] port %v\n", port)
-	return port
 }

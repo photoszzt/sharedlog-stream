@@ -11,14 +11,10 @@ import (
 	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
-	"strings"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"github.com/go-redis/redis/v9"
-	"github.com/rs/zerolog/log"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // when restoring the checkpoint, it's reading from
@@ -146,33 +142,6 @@ func (em *ChkptMngr) GetCurrentEpoch() uint32             { return em.prodId.Tas
 func (em *ChkptMngr) GetCurrentTaskId() uint64            { return em.prodId.TaskId }
 func (em *ChkptMngr) GetProducerId() commtypes.ProducerId { return em.prodId }
 
-func GetChkptMngrAddr() []string {
-	raw_addr := os.Getenv("CHKPT_MNGR_ADDR")
-	return strings.Split(raw_addr, ",")
-}
-
-func PrepareChkptClientGrpc(engine1 string) (*grpc.ClientConn, error) {
-	var opts []grpc.DialOption
-	retryPolicy := `{
-		"methodConfig": [{
-		  "name": [{"service": "checkpt.ChkptMngr"}],
-		  "waitForReady": true,
-		  "retryPolicy": {
-			  "MaxAttempts": 4,
-			  "InitialBackoff": ".002s",
-			  "MaxBackoff": ".01s",
-			  "BackoffMultiplier": 2.0,
-			  "RetryableStatusCodes": [ "UNAVAILABLE" ]
-		  }
-		}]}`
-	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(retryPolicy))
-	// mngr_addr := GetChkptMngrAddr()
-	// log.Info().Strs("chkpt mngr addr", mngr_addr).Str("connected to", mngr_addr[0])
-	// return grpc.Dial(mngr_addr[0], opts...)
-	log.Info().Str("connected to", engine1)
-	return grpc.Dial(engine1, opts...)
-}
-
 func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	rc []*redis.Client,
 	mc *snapshot_store.RedisSnapshotStore,
@@ -188,7 +157,8 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 		args.ectx.SubstreamNum(), prodId.String(), args.warmup, args.flushEvery, args.waitEndMark)
 	prodConsumerExactlyOnce(args, chkptMngr)
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
-	conn, err := PrepareChkptClientGrpc(args.engine1)
+	// conn, err := PrepareChkptClientGrpc(args.engine1)
+	conn, err := checkpt.PrepareChkptClientGrpc()
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

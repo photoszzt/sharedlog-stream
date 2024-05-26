@@ -16,7 +16,6 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
-	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 	"sync"
@@ -336,7 +335,8 @@ func (h *nexmarkSourceHandler) eventGeneration(
 	commitEveryMs := time.Duration(inputConfig.CommitEveryMs) * time.Millisecond
 	gua := exactly_once_intr.GuaranteeMth(inputConfig.GuaranteeMth)
 	if gua == exactly_once_intr.ALIGN_CHKPT {
-		conn, err := stream_task.PrepareChkptClientGrpc(inputConfig.Engine1)
+		// conn, err := stream_task.PrepareChkptClientGrpc(inputConfig.Engine1)
+		conn, err := checkpt.PrepareChkptClientGrpc()
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}

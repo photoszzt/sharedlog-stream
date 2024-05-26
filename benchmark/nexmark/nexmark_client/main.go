@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -98,6 +99,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "expected guarantee is none, alo, 2pc and epoch")
 		return
 	}
+	ctx := context.Background()
 	fmt.Fprintf(os.Stderr, "wait for last: %v, sink max_buf_size: %v\n", FLAGS_waitForEndMark, FLAGS_buf_max_size)
 	switch FLAGS_app_name {
 	case "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "windowedAvg", "fanout":
@@ -134,7 +136,7 @@ func main() {
 		if FLAGS_app_name == "q7" {
 			fixedMaxDur = uint32(450)
 		}
-		params, err := common.Invoke(invokeFuncParam, baseQueryInput, common.InvokeSrcFunc(invokeSourceFunc_),
+		params, err := common.Invoke(ctx, invokeFuncParam, baseQueryInput, common.InvokeSrcFunc(invokeSourceFunc_),
 			FLAGS_additionalBytes, fixedMaxDur)
 		if err != nil {
 			panic(err)
