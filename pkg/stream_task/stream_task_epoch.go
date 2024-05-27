@@ -44,7 +44,7 @@ func SetKVStoreWithChangelogSnapshot[K, V any](
 			}
 			fmt.Fprintf(os.Stderr, "kv snapshot size: %d, store snapshot at %x\n", len(out), tpLogoff[0].LogOff)
 			tp := fmt.Sprintf("%s-%d", kvstore.ChangelogTopicName(), kvstore.SubstreamNum())
-			return rs.StoreSnapshot(ctx, out, tp, tpLogoff[0].LogOff, kvstore.GetInstanceId())
+			return rs.StoreSnapshot(ctx, out, tp, tpLogoff[0].LogOff, kvstore.SubstreamNum())
 		})
 }
 
@@ -71,7 +71,7 @@ func SetWinStoreWithChangelogSnapshot[K, V any](
 			}
 			fmt.Fprintf(os.Stderr, "win snapshot size: %d, store snapshot at %x\n", len(out), tpLogOff[0].LogOff)
 			tp := fmt.Sprintf("%s-%d", winStore.ChangelogTopicName(), winStore.SubstreamNum())
-			return rs.StoreSnapshot(ctx, out, tp, tpLogOff[0].LogOff, winStore.GetInstanceId())
+			return rs.StoreSnapshot(ctx, out, tp, tpLogOff[0].LogOff, winStore.SubstreamNum())
 		})
 }
 
@@ -440,14 +440,14 @@ func finalMark(
 		for _, kv := range meta.args.kvChangelogs {
 			err = kv.WaitForAllSnapshot()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "KV WaitForAllSnapshot failed: %v", err)
+				fmt.Fprintf(os.Stderr, "KV WaitForAllSnapshot failed: %v\n", err)
 				// return common.GenErrFnOutput(fmt.Errorf("KV WaitForAllSnapshot failed: %v", err))
 			}
 		}
 		for _, wsc := range meta.args.windowStoreChangelogs {
 			err = wsc.WaitForAllSnapshot()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Win WaitForAllSnapshot failed: %v", err)
+				fmt.Fprintf(os.Stderr, "Win WaitForAllSnapshot failed: %v\n", err)
 				// return common.GenErrFnOutput(fmt.Errorf("Win WaitForAllSnapshot failed: %v", err))
 			}
 		}

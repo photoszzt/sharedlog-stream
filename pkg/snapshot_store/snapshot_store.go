@@ -38,8 +38,10 @@ type RedisSnapshotStore struct {
 
 func NewRedisSnapshotStore(createSnapshot bool) RedisSnapshotStore {
 	if createSnapshot {
+		c := redis_client.GetRedisClients()
+		fmt.Fprintf(os.Stderr, "redis client arr size %d\n", len(c))
 		return RedisSnapshotStore{
-			rdb_arr:  redis_client.GetRedisClients(),
+			rdb_arr:  c,
 			snapSize: stats.NewConcurrentStatsCollector[int]("redisStore", stats.DEFAULT_COLLECT_DURATION),
 		}
 	} else {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
 	"sharedlog-stream/pkg/debug"
@@ -51,6 +52,88 @@ func NewEpochMarkConsumer(
 
 func (emc *EpochMarkConsumer) OutputRemainingStats() {
 	// emc.streamTime.PrintRemainingStats()
+}
+
+func (emc *EpochMarkConsumer) ReadNextMock(msgs []*commtypes.RawMsg, parNum uint8) (*commtypes.RawMsg, error) {
+	msgQueue := emc.msgBuffer[parNum]
+	if msgQueue.Len() != 0 {
+		retMsg := emc.checkMsgQueue(msgQueue, parNum)
+		if retMsg != nil {
+			return retMsg, nil
+		}
+	}
+	idx := 0
+	for {
+		if idx >= len(msgs) {
+			return nil, common_errors.ErrStreamEmpty
+		}
+		rawMsg := msgs[idx]
+		idx += 1
+		// nowMs := time.Now().UnixMilli()
+		// emc.streamTime.AddSample(nowMs - rawMsg.InjTsMs)
+
+		// debug.Fprintf(os.Stderr, "RawMsg\n")
+		// debug.Fprintf(os.Stderr, "\tPayload %v\n", string(rawMsg.Payload))
+		// debug.Fprintf(os.Stderr, "\tLogSeq 0x%x\n", rawMsg.LogSeqNum)
+		// debug.Fprintf(os.Stderr, "\tIsControl: %v\n", rawMsg.IsControl)
+		// debug.Fprintf(os.Stderr, "\tIsPayloadArr: %v\n", rawMsg.IsPayloadArr)
+
+		// if !rawMsg.IsControl {
+		// 	debug.Fprintf(os.Stderr, "%s RawMsg: Payload %v, LogSeq 0x%x, MsgSeqNum 0x%x, IsControl: %v, IsPayloadArr: %v\n",
+		// 		emc.stream.TopicName(), string(rawMsg.Payload), rawMsg.LogSeqNum, rawMsg.MsgSeqNum, rawMsg.IsControl, rawMsg.IsPayloadArr)
+		// }
+
+		// control entry's msgseqnum is written for the epoch log;
+		// reading from the normal stream, we don't count this entry as a duplicate one
+		// control entry itself is idempodent; n commit record with the same content is the
+		// same as one commit record
+		if !rawMsg.IsControl {
+			if shouldIgnoreThisMsg(emc.curReadMsgSeqNum, rawMsg) {
+				fmt.Fprintf(os.Stderr, "got a duplicate entry; continue\n")
+				continue
+			}
+			// fmt.Fprintf(os.Stderr, "appending normalMsg logSeq: 0x%x\n", rawMsg.LogSeqNum)
+		} else {
+			epochMark, err := emc.epochMarkerSerde.Decode(rawMsg.Payload)
+			if err != nil {
+				return nil, err
+			}
+			// fmt.Fprintf(os.Stderr, "appending %+v, logSeq: 0x%x\n", epochMark, rawMsg.LogSeqNum)
+			rawMsg.Mark = epochMark.Mark
+			rawMsg.ProdIdx = epochMark.ProdIndex
+			if epochMark.Mark == commtypes.EPOCH_END {
+				// debug.Fprintf(os.Stderr, "%+v\n", epochMark)
+				ranges, ok := emc.marked[rawMsg.ProdId]
+				if !ok {
+					ranges = make(map[uint8]commtypes.SeqRangeSet)
+				}
+				markRanges := epochMark.OutputRanges[emc.stream.TopicName()]
+				for _, r := range markRanges {
+					if _, ok := ranges[r.SubStreamNum]; !ok {
+						ranges[r.SubStreamNum] = commtypes.NewSeqRangeSet()
+					}
+					ranges[r.SubStreamNum].Add(commtypes.SeqRange{
+						Start: r.Start,
+						End:   rawMsg.LogSeqNum,
+					})
+				}
+				emc.marked[rawMsg.ProdId] = ranges
+				rawMsg.MarkRanges = markRanges
+			} else if epochMark.Mark == commtypes.SCALE_FENCE {
+				rawMsg.ScaleEpoch = epochMark.ScaleEpoch
+			} else if epochMark.Mark == commtypes.STREAM_END {
+				rawMsg.StartTime = epochMark.StartTime
+			} else if epochMark.Mark == commtypes.CHKPT_MARK {
+				panic("checkpoint mark should not appear in epoch mark protocol")
+			}
+		}
+
+		msgQueue.PushBack(rawMsg)
+		retMsg := emc.checkMsgQueue(msgQueue, parNum)
+		if retMsg != nil {
+			return retMsg, nil
+		}
+	}
 }
 
 func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
