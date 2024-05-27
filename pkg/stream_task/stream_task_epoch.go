@@ -440,13 +440,15 @@ func finalMark(
 		for _, kv := range meta.args.kvChangelogs {
 			err = kv.WaitForAllSnapshot()
 			if err != nil {
-				return common.GenErrFnOutput(fmt.Errorf("KV WaitForAllSnapshot failed: %v", err))
+				fmt.Fprintf(os.Stderr, "KV WaitForAllSnapshot failed: %v", err)
+				// return common.GenErrFnOutput(fmt.Errorf("KV WaitForAllSnapshot failed: %v", err))
 			}
 		}
 		for _, wsc := range meta.args.windowStoreChangelogs {
 			err = wsc.WaitForAllSnapshot()
 			if err != nil {
-				return common.GenErrFnOutput(fmt.Errorf("Win WaitForAllSnapshot failed: %v", err))
+				fmt.Fprintf(os.Stderr, "Win WaitForAllSnapshot failed: %v", err)
+				// return common.GenErrFnOutput(fmt.Errorf("Win WaitForAllSnapshot failed: %v", err))
 			}
 		}
 		elapsed := time.Since(snStart)

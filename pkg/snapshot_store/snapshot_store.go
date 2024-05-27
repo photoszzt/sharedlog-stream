@@ -130,7 +130,7 @@ func (rs *RedisSnapshotStore) StoreSnapshot(ctx context.Context,
 	debug.Assert(env != nil, "env should be set")
 	key := fmt.Sprintf("%s_%#x", changelogTpName, logOff)
 	idx := uint64(instanceId) % uint64(len(rs.rdb_arr))
-	debug.Fprintf(os.Stderr, "store snapshot key: %s at redis[%d]\n", key, idx)
+	fmt.Fprintf(os.Stderr, "store snapshot key: %s at redis[%d]\n", key, idx)
 	err := rs.rdb_arr[idx].Set(ctx, key, snapshot, time.Duration(60)*time.Second).Err()
 	if err != nil {
 		return err
