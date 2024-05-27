@@ -258,7 +258,7 @@ func pausedFlushMark(
 	flushTime := stats.Elapsed(flushAllStart).Microseconds()
 
 	mPartBeg := time.Now()
-	logOff, _, err := markEpoch(ctx, meta)
+	logOff, shouldExit, err := markEpoch(ctx, meta)
 	if err != nil {
 		return false, common.GenErrFnOutput(fmt.Errorf("markEpoch: %v", err))
 	}
@@ -280,7 +280,7 @@ func pausedFlushMark(
 		meta.t.flushAtLeastOne.AddSample(flushTime)
 	}
 	meta.t.epochMarkTimes += 1
-	return false, nil
+	return shouldExit, nil
 }
 
 type epochProcessMeta struct {
@@ -333,23 +333,23 @@ func processInEpoch(
 		shouldMarkByTime := meta.args.commitEvery != 0 && timeSinceLastMark >= meta.args.commitEvery
 		if shouldMarkByTime && hasProcessData {
 			// execIntrMs.AddSample(timeSinceLastMark.Milliseconds())
-			_, fn_out := pausedFlushMark(ctx, meta, &snapshotTime, &snapshotTimer, &paused)
+			shouldExit, fn_out := pausedFlushMark(ctx, meta, &snapshotTime, &snapshotTimer, &paused)
 			if fn_out != nil {
 				return fn_out
 			}
-			// if shouldExit {
-			// 	ret := &common.FnOutput{Success: true}
-			// 	if testForFail {
-			// 		ret = &common.FnOutput{Success: true, Message: common_errors.ErrReturnDueToTest.Error()}
-			// 	}
-			// 	fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", meta.t.epochMarkTimes)
-			// 	meta.t.PrintRemainingStats()
-			// 	// execIntrMs.PrintRemainingStats()
-			// 	// thisAndLastCmtMs.PrintRemainingStats()
-			// 	updateReturnMetric(ret, &warmupCheck,
-			// 		false, meta.t.GetEndDuration(), meta.args.ectx.SubstreamNum())
-			// 	return ret
-			// }
+			if shouldExit {
+				ret := &common.FnOutput{Success: true}
+				if testForFail {
+					ret = &common.FnOutput{Success: true, Message: common_errors.ErrReturnDueToTest.Error()}
+				}
+				fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", meta.t.epochMarkTimes)
+				meta.t.PrintRemainingStats()
+				// execIntrMs.PrintRemainingStats()
+				// thisAndLastCmtMs.PrintRemainingStats()
+				updateReturnMetric(ret, &warmupCheck,
+					false, meta.t.GetEndDuration(), meta.args.ectx.SubstreamNum())
+				return ret
+			}
 			hasProcessData = false
 			// btwThisLastCmt := time.Since(markTimer)
 			// thisAndLastCmtMs.AddSample(btwThisLastCmt.Milliseconds())
@@ -497,18 +497,18 @@ func markEpoch(ctx context.Context,
 ) (logOff uint64, shouldExit bool, err error) {
 	prepareStart := stats.TimerBegin()
 	// should rely on conditional append
-	// rawMsgs, err := meta.em.SyncToRecent(ctx)
-	// if err != nil {
-	// 	return 0, false, fmt.Errorf("SyncToRecent: %v", err)
-	// }
-	// for _, rawMsg := range rawMsgs {
-	// 	if rawMsg.Mark == commtypes.FENCE {
-	// 		if (rawMsg.ProdId.TaskId == meta.em.GetCurrentTaskId() && rawMsg.ProdId.TaskEpoch > meta.em.GetCurrentEpoch()) ||
-	// 			rawMsg.ProdId.TaskId != meta.em.GetCurrentTaskId() {
-	// 			return 0, true, nil
-	// 		}
-	// 	}
-	// }
+	rawMsgs, err := meta.em.SyncToRecent(ctx)
+	if err != nil {
+		return 0, false, fmt.Errorf("SyncToRecent: %v", err)
+	}
+	for _, rawMsg := range rawMsgs {
+		if rawMsg.Mark == commtypes.FENCE {
+			if (rawMsg.ProdId.TaskId == meta.em.GetCurrentTaskId() && rawMsg.ProdId.TaskEpoch > meta.em.GetCurrentEpoch()) ||
+				rawMsg.ProdId.TaskId != meta.em.GetCurrentTaskId() {
+				return 0, true, nil
+			}
+		}
+	}
 	epochMarker, err := epoch_manager.GenEpochMarker(ctx, meta.em, meta.args.ectx,
 		meta.args.kvChangelogs, meta.args.windowStoreChangelogs)
 	if err != nil {
