@@ -141,16 +141,10 @@ func (h *q8JoinStreamHandler) setupJoin(sp *common.QueryInput) (
 				StartTime: windowStart,
 			})
 		})
-	aucMp, err := getMaterializedParam[uint64, *ntypes.Event](
+	aucMp := getMaterializedParam[uint64, *ntypes.Event](
 		"q8AuctionsBySellerIDWinTab", h.msgSerde, sp)
-	if err != nil {
-		return nil, nil, nil, nil, common.GenErrFnOutput(err)
-	}
-	perMp, err := getMaterializedParam[uint64, *ntypes.Event](
+	perMp := getMaterializedParam[uint64, *ntypes.Event](
 		"q8PersonsByIDWinTab", h.msgSerde, sp)
-	if err != nil {
-		return nil, nil, nil, nil, common.GenErrFnOutput(err)
-	}
 	aucJoinsPerFunc, perJoinsAucFunc, wsos, setupSnapCallbackFunc, err := execution.SetupSkipMapStreamStreamJoin(
 		aucMp, perMp, store.IntegerCompare[uint64], joiner, joinWindows,
 		exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))

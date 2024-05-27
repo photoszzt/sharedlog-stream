@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
@@ -114,6 +115,8 @@ func SetupTableTableJoinWithSkipmap[K comparable, VLeft, VRight, VR any](
 		if err != nil {
 			return nil, nil, nil, nil, err
 		}
+		debug.Assert(leftTab.GetInstanceId() == mpLeft.ParNum(), "instance id should equal to par num")
+		debug.Assert(rightTab.GetInstanceId() == mpRight.ParNum(), "instance id should equal to par num")
 		toRightTab, rightTab, err = ToInMemSkipmapKVTable(mpRight.StoreName(), less,
 			mpRight.ParNum(), mpRight.SerdeFormat(), mpRight.MessageSerde(), gua)
 		if err != nil {

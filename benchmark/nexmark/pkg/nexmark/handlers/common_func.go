@@ -31,8 +31,8 @@ func compareStartEndTime(a, b ntypes.StartEndTime) bool {
 func getMaterializedParam[K, V any](storeName string,
 	kvMsgSerde commtypes.MessageGSerdeG[K, V],
 	sp *common.QueryInput,
-) (*store_with_changelog.MaterializeParam[K, V], error) {
-	return store_with_changelog.NewMaterializeParamBuilder[K, V]().
+) *store_with_changelog.MaterializeParam[K, V] {
+	r := store_with_changelog.NewMaterializeParamBuilder[K, V]().
 		MessageSerde(kvMsgSerde).
 		StoreName(storeName).
 		ParNum(sp.ParNum).
@@ -42,6 +42,9 @@ func getMaterializedParam[K, V any](storeName string,
 			TimeOut:       common.SrcConsumeTimeout,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}).BufMaxSize(sp.BufMaxSize).Build()
+	debug.Assert(r.ParNum() == sp.ParNum, "parNum should be set")
+	debug.Assert(r.StoreName() == storeName, "storeName should be set")
+	return r
 }
 
 func streamArgsBuilder(
@@ -76,11 +79,8 @@ func setupKVStoreForAgg[K comparable, V any](
 	error,
 ) {
 	p.CommonStoreParam.GuaranteeMth = exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
-	mp, err := getMaterializedParam[K, commtypes.ValueTimestampG[V]](
+	mp := getMaterializedParam[K, commtypes.ValueTimestampG[V]](
 		p.StoreName, msgSerde, sp)
-	if err != nil {
-		return nil, nil, nil, err
-	}
 	store, kvos, f, err := execution.GetKVStore(ctx, p, mp)
 	if err != nil {
 		return nil, nil, nil, err
@@ -104,11 +104,8 @@ func setupWinStoreForAgg[K comparable, V any](
 ) {
 	p.RetainDuplicates = false
 	p.CommonStoreParam.GuaranteeMth = exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
-	mp, err := getMaterializedParam[K, commtypes.ValueTimestampG[V]](
+	mp := getMaterializedParam[K, commtypes.ValueTimestampG[V]](
 		p.StoreName, msgSerde, sp)
-	if err != nil {
-		return nil, nil, nil, err
-	}
 	store, wsos, f, err := execution.GetWinStore(ctx, p, mp)
 	if err != nil {
 		return nil, nil, nil, err

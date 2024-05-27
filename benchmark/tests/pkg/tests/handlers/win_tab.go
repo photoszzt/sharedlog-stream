@@ -31,7 +31,7 @@ func getWindowStoreWithChangelog(retainDuplicates bool) *store_with_changelog.In
 		ValSerde: commtypes.StringSerdeG{},
 	}
 	storeName := "test1"
-	mp, err := store_with_changelog.NewMaterializeParamBuilder[uint32, string]().
+	mp := store_with_changelog.NewMaterializeParamBuilder[uint32, string]().
 		MessageSerde(msgSerde).
 		StoreName(storeName).
 		ParNum(0).
@@ -43,9 +43,6 @@ func getWindowStoreWithChangelog(retainDuplicates bool) *store_with_changelog.In
 		}).
 		BufMaxSize(32 * 1024).
 		Build()
-	if err != nil {
-		panic(err)
-	}
 	winTab := store.NewInMemorySkipMapWindowStore[uint32, string](mp.StoreName(),
 		store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE, retainDuplicates, store.IntegerCompare[uint32],
 	)

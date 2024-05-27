@@ -94,7 +94,7 @@ func (rs *RedisSnapshotStore) StoreAlignChkpt(ctx context.Context, snapshot []by
 	keys = append(keys, storeName)
 	key := strings.Join(keys, "-")
 	idx := uint64(instanceId) % l
-	debug.Fprintf(os.Stderr, "store snapshot key: %s at redis[%d]\n", key, idx)
+	debug.Fprintf(os.Stderr, "store chkpt key: %s at redis[%d], instance id %d, redis arr len %d\n", key, idx, instanceId, l)
 	rs.snapSize.AddSample(len(snapshot))
 	err := rs.rdb_arr[idx].Set(ctx, key, snapshot, time.Duration(0)*time.Second).Err()
 	if err != nil {

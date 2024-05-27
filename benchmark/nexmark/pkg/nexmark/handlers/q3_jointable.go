@@ -160,14 +160,8 @@ func (h *q3JoinTableHandler) setupQ3Join(sp *common.QueryInput) (
 			// debug.Fprintf(os.Stderr, "join outputs: %v\n", ncsi)
 			return optional.Some(ncsi)
 		})
-	mpAuc, err := getMaterializedParam[uint64, commtypes.ValueTimestampG[*ntypes.Event]]("q3AuctionsBySellerIDStore", h.storeMsgSerde, sp)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-	mpPer, err := getMaterializedParam[uint64, commtypes.ValueTimestampG[*ntypes.Event]]("q3PersonsByIDStore", h.storeMsgSerde, sp)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
+	mpAuc := getMaterializedParam[uint64, commtypes.ValueTimestampG[*ntypes.Event]]("q3AuctionsBySellerIDStore", h.storeMsgSerde, sp)
+	mpPer := getMaterializedParam[uint64, commtypes.ValueTimestampG[*ntypes.Event]]("q3PersonsByIDStore", h.storeMsgSerde, sp)
 	return execution.SetupTableTableJoinWithSkipmap(
 		mpAuc, mpPer, store.Uint64LessFunc, joiner, exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
 }

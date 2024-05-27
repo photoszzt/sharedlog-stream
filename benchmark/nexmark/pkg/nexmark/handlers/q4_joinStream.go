@@ -140,16 +140,10 @@ func (h *q4JoinStreamHandler) setupQ4Join(sp *common.QueryInput) (
 				AucCategory: auc.Category,
 			})
 		})
-	aucMp, err := getMaterializedParam[uint64, *ntypes.Event](
+	aucMp := getMaterializedParam[uint64, *ntypes.Event](
 		"q4AuctionsByIDStore", h.msgSerde, sp)
-	if err != nil {
-		return nil, nil, nil, nil, common.GenErrFnOutput(err)
-	}
-	bidMp, err := getMaterializedParam[uint64, *ntypes.Event](
+	bidMp := getMaterializedParam[uint64, *ntypes.Event](
 		"q4BidsByAuctionIDStore", h.msgSerde, sp)
-	if err != nil {
-		return nil, nil, nil, nil, common.GenErrFnOutput(err)
-	}
 	aucJoinBidsFunc, bidsJoinAucFunc, wsos, setSnapFunc, err := execution.SetupSkipMapStreamStreamJoin(
 		aucMp, bidMp, store.IntegerCompare[uint64], joiner, jw,
 		exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))

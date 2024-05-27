@@ -2,7 +2,9 @@ package execution
 
 import (
 	"context"
+	"os"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/store"
@@ -117,6 +119,8 @@ func GetKVStore[K comparable, V any](
 			return nil
 		}
 	}
+	debug.Fprintf(os.Stderr, "cached store instance id: %d, parNum: %d\n", cachedStore.GetInstanceId(), mp.ParNum())
+	debug.Assert(cachedStore.GetInstanceId() == mp.ParNum(), "instance id should be the same in mp")
 	return cachedStore, kvos, f, nil
 }
 

@@ -65,7 +65,7 @@ type SetBufMaxSize[K, V any] interface {
 }
 
 type BuildMaterializeParam[K, V any] interface {
-	Build() (*MaterializeParam[K, V], error)
+	Build() *MaterializeParam[K, V]
 }
 
 func (mb *MaterializeParamBuilder[K, V]) MessageSerde(msgSerde commtypes.MessageGSerdeG[K, V]) SetStoreName[K, V] {
@@ -98,6 +98,6 @@ func (mb *MaterializeParamBuilder[K, V]) BufMaxSize(bufMaxSize uint32) BuildMate
 	return mb
 }
 
-func (mb *MaterializeParamBuilder[K, V]) Build() (*MaterializeParam[K, V], error) {
-	return mb.mp, nil
+func (mb *MaterializeParamBuilder[K, V]) Build() *MaterializeParam[K, V] {
+	return mb.mp
 }

@@ -146,16 +146,10 @@ func (h *q7JoinMaxBid) setupJoin(sp *common.QueryInput) (
 				WEndMs:   value2.EndTimeMs,
 			})
 		})
-	bMp, err := getMaterializedParam[uint64, *ntypes.Event](
+	bMp := getMaterializedParam[uint64, *ntypes.Event](
 		"q7BidByPriceTab", h.inMsgSerde1, sp)
-	if err != nil {
-		return nil, nil, nil, nil, common.GenErrFnOutput(err)
-	}
-	maxBMp, err := getMaterializedParam[uint64, ntypes.StartEndTime](
+	maxBMp := getMaterializedParam[uint64, ntypes.StartEndTime](
 		"q7MaxBidByPriceTab", h.inMsgSerde2, sp)
-	if err != nil {
-		return nil, nil, nil, nil, common.GenErrFnOutput(err)
-	}
 	bJoinMaxBFunc, maxBJoinBFunc, wsos, setupSnapCallbackFunc, err := execution.SetupSkipMapStreamStreamJoin(
 		bMp, maxBMp, store.IntegerCompare[uint64], joiner, jw,
 		exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
