@@ -66,7 +66,7 @@ func SetKVStoreChkpt[K, V any](
 			// 	buf2 := new([]byte)
 			// 	for _, p := range outBin {
 			// 		*buf2 = p
-			// 		commtypes.PushBuffer(buf)
+			// 		commtypes.PushBuffer(buf2)
 			// 	}
 			// }
 			return err
