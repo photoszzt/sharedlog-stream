@@ -44,7 +44,7 @@ func NewKeyValueStoreWithChangelogG[K, V any](mp *MaterializeParam[K, V],
 	if err != nil {
 		return nil, err
 	}
-	store.SetInstanceId(mp.ParNum())
+	store.SetInstanceId(mp.parNum)
 	return &KeyValueStoreWithChangelogG[K, V]{
 		kvstore:          store,
 		trackFunc:        exactly_once_intr.DefaultTrackProdSubstreamFunc,
@@ -311,6 +311,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) GetInstanceId() uint8 {
 func CreateInMemorySkipmapKVTableWithChangelogG[K, V any](mp *MaterializeParam[K, V], less store.LessFunc[K],
 ) (*KeyValueStoreWithChangelogG[K, V], error) {
 	s := store.NewInMemorySkipmapKeyValueStoreG[K, V](mp.storeName, less)
+	s.SetInstanceId(mp.parNum)
 	return NewKeyValueStoreWithChangelogG[K, V](mp, s)
 }
 

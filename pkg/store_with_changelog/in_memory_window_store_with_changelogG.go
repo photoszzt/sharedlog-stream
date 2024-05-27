@@ -340,6 +340,7 @@ func ToInMemSkipMapWindowTableWithChangelogG[K, V any](
 ) (*processor.MeteredProcessorG[K, V, K, V], *InMemoryWindowStoreWithChangelogG[K, V], error) {
 	winTab := store.NewInMemorySkipMapWindowStore[K, V](mp.storeName,
 		joinWindow.MaxSize()+joinWindow.GracePeriodMs(), joinWindow.MaxSize(), retainDuplicates, comparable)
+	winTab.SetInstanceId(mp.parNum)
 	tabWithLog, err := NewInMemoryWindowStoreWithChangelogG[K, V](winTab, mp)
 	if err != nil {
 		return nil, nil, err
