@@ -10,3 +10,7 @@ q2_out/
 q3_out/
 q4_out/
 q7_out/
+.ipynb_checkpoints/
+.metals/
+benchmark/lat_tp/kafka_consume_java/.idea/
+benchmark/lat_tp/kafka_produce_java/.idea/
